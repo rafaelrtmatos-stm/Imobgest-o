@@ -15,11 +15,18 @@ import { getStoredUsers } from '../utils/storage';
 import { INITIAL_USERS } from '../data/initialData';
 
 interface AuthScreenProps {
-  users: AppUser[];
-  onLoginSuccess: (user: AppUser) => void;
+  users?: AppUser[];
+  onLogin?: (user: AppUser) => void;
+  onLoginSuccess?: (user: AppUser) => void;
+  onUpdateUsers?: React.Dispatch<React.SetStateAction<AppUser[]>>;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLoginSuccess }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({ 
+  users = [], 
+  onLogin, 
+  onLoginSuccess,
+  onUpdateUsers 
+}) => {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -88,7 +95,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLoginSuccess })
       };
 
       setIsLoading(false);
-      onLoginSuccess(updatedUser);
+      if (onLogin) {
+        onLogin(updatedUser);
+      }
+      if (onLoginSuccess) {
+        onLoginSuccess(updatedUser);
+      }
     }, 200);
   };
 
