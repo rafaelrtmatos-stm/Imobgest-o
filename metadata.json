@@ -1,6 +1,0 @@
-{
-  "name": "ImobGestão - Vendas & Contratos Imobiliários",
-  "description": "Sistema imobiliário com gerenciador automático de contratos Word (.docx), visualização de empreendimentos e mapas de lotes, gestão de clientes com vínculo de lotes adquiridos, vendas à vista e parceladas, assinaturas digitais e configurações da empresa.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
