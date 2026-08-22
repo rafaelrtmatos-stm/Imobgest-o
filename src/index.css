@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-windows: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-heading: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+    --font-mono: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
+  }
+
+  body {
+    background-color: #FFFFFF;
+    color: #1E293B; /* Cinza grafite escuro */
+    font-family: var(--font-windows);
+    min-height: 100vh;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: var(--font-heading);
+    letter-spacing: -0.025em;
+    color: #0F172A; /* Grafite profundo */
+    font-weight: 700;
+  }
+
+  .font-mono, code {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Cards & Componentes: Fundo Branco, Bordas Grafite e Realces Verdes */
+.graphite-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+}
+
+.graphite-card-green-border {
+  background-color: #FFFFFF;
+  border: 1.5px solid #10B981; /* Borda Verde Esmeralda */
+  box-shadow: 0 4px 20px -2px rgba(16, 185, 129, 0.08);
+}
+
+.graphite-card-header {
+  background-color: #F8FAFC;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.windows-input {
+  background-color: #FFFFFF;
+  border: 1.5px solid #CBD5E1; /* Borda Grafite Clara */
+  color: #0F172A; /* Grafite Escuro */
+  transition: all 0.2s ease-in-out;
+}
+
+.windows-input:focus {
+  border-color: #10B981; /* Foco Verde */
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  outline: none;
+}
+
+/* Scrollbar Clean */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #94A3B8;
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748B;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt !important;
+    background-image: none !important;
+  }
+
+  .no-print,
+  header,
+  nav,
+  button,
+  footer {
+    display: none !important;
+  }
+
+  #contract-print-area {
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .contract-document {
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+  }
+
+  @page {
+    margin: 20mm 15mm 20mm 15mm;
+    size: A4 portrait;
+  }
+}
