@@ -20,9 +20,31 @@ import {
   Zap,
   HelpCircle,
   X,
-  Settings
+  Settings,
+  ShieldCheck,
+  Calendar,
+  Layers,
+  Clock,
+  ExternalLink,
+  History,
+  Building2,
+  DollarSign,
+  User,
+  Share2,
+  Lock,
+  ChevronRight
 } from 'lucide-react';
-import { DocumentFieldMapping, DocumentTemplate, SaleRecord, TipoModeloDocumento } from '../types';
+import { 
+  AppUser, 
+  Cliente, 
+  CompanyConfig, 
+  Corretor, 
+  DocumentFieldMapping, 
+  DocumentTemplate, 
+  Empreendimento, 
+  SaleRecord, 
+  TipoModeloDocumento 
+} from '../types';
 import { 
   SYSTEM_FIELDS_CATALOG, 
   parseUploadedDocxFile, 
@@ -30,34 +52,60 @@ import {
   findSystemFieldByTag,
   normalizeTag 
 } from '../utils/docxProcessor';
+import { formatCurrency, formatDateBR } from '../utils/formatters';
+import { ModularContractGenerator } from './ModularContractGenerator';
+import { ContratoModularRecord } from '../types/modularContract';
 
 interface WordTemplateManagerProps {
   templates: DocumentTemplate[];
   onSaveTemplates: (templates: DocumentTemplate[]) => void;
   sales?: SaleRecord[];
-  onOpenGenerator: (template?: DocumentTemplate, sale?: SaleRecord) => void;
+  clientes?: Cliente[];
+  empreendimentos?: Empreendimento[];
+  corretores?: Corretor[];
+  currentUser?: AppUser | null;
+  companyConfig?: CompanyConfig;
+  onOpenGenerator: (template?: DocumentTemplate, sale?: SaleRecord, defaultMode?: 'a_vista' | 'parcelado') => void;
+  onOpenDigitalSignatureFlow?: (contratoData: any) => void;
   isSettingsMode?: boolean;
   onNavigateToSettings?: () => void;
 }
+
+const STORAGE_KEY_MODULAR_CONTRACTS = 'imobgestao_modular_contracts_v1';
 
 export const WordTemplateManager: React.FC<WordTemplateManagerProps> = ({
   templates,
   onSaveTemplates,
   sales = [],
+  clientes = [],
+  empreendimentos = [],
+  corretores = [],
+  currentUser = null,
+  companyConfig,
   onOpenGenerator,
+  onOpenDigitalSignatureFlow,
   isSettingsMode = false,
   onNavigateToSettings,
 }) => {
-  // Filtros de listagem
+  // 1. Aba principal interna em "Modelos e Documentos":
+  // 'cards' = Os 3 Cards Oficiais (À Vista, Parcelado, Exclusividade)
+  // 'exclusividade_modular' = Gerador Modular de Exclusividade integrado
+  // 'historico' = Histórico Central de Contratos
+  // 'modelos_docx' = Gerenciar Arquivos .docx
+  const [activeSubTab, setActiveSubTab] = useState<'cards' | 'exclusividade_modular' | 'historico' | 'modelos_docx'>('cards');
+
+  // Filtros de listagem de modelos .docx
   const [filterTipo, setFilterTipo] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [historicoSearch, setHistoricoSearch] = useState<string>('');
+  const [historicoStatusFilter, setHistoricoStatusFilter] = useState<string>('all');
 
-  // Estados do Modal de Cadastro / Edição
+  // Estados do Modal de Cadastro / Edição de Modelo .docx
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1); // 1: Envio, 2: Reconhecimento, 3: Pré-visualização
 
-  // Formulário do Wizard
+  // Formulário do Wizard de template .docx
   const [formData, setFormData] = useState<{
     nome: string;
     tipoDocumento: TipoModeloDocumento;
@@ -105,7 +153,46 @@ export const WordTemplateManager: React.FC<WordTemplateManagerProps> = ({
   const replaceFileInputRef = useRef<HTMLInputElement>(null);
   const [replacingTemplateId, setReplacingTemplateId] = useState<string | null>(null);
 
-  // Abrir modal de novo modelo
+  // Carregar contratos modulares do localStorage para o histórico unificado
+  const [modularContracts, setModularContracts] = useState<ContratoModularRecord[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_MODULAR_CONTRACTS);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.warn('Erro ao carregar contratos modulares:', e);
+    }
+    return [];
+  });
+
+  // Handler para abrir o gerador À Vista
+  const handleOpenAVistaGenerator = () => {
+    const tplVista = templates.find(t => 
+      t.tipoDocumento === 'recibo_quitacao' || 
+      t.tipoDocumento === 'venda_a_vista' || 
+      t.tipoDocumento === 'terreno_a_vista' ||
+      t.tipoDocumento === 'recibo'
+    ) || templates[0];
+
+    onOpenGenerator(tplVista, undefined, 'a_vista');
+  };
+
+  // Handler para abrir o gerador Parcelado
+  const handleOpenParceladoGenerator = () => {
+    const tplParcelado = templates.find(t => 
+      t.tipoDocumento === 'compromisso_parcelado' || 
+      t.tipoDocumento === 'venda_parcelada' ||
+      t.tipoDocumento === 'terreno_parcelado'
+    ) || templates[0];
+
+    onOpenGenerator(tplParcelado, undefined, 'parcelado');
+  };
+
+  // Handler para abrir o gerador Modular de Exclusividade
+  const handleOpenExclusividadeGenerator = () => {
+    setActiveSubTab('exclusividade_modular');
+  };
+
+  // Abrir modal de novo modelo .docx
   const handleOpenNewModal = () => {
     setEditingTemplateId(null);
     setFormData({
@@ -138,7 +225,7 @@ export const WordTemplateManager: React.FC<WordTemplateManagerProps> = ({
       tags: tpl.tags,
       customMappings: tpl.customMappings || {},
     });
-    setWizardStep(2); // vai direto para o reconhecimento/revisão
+    setWizardStep(2);
     setUploadError(null);
     setIsModalOpen(true);
   };
@@ -180,982 +267,711 @@ export const WordTemplateManager: React.FC<WordTemplateManagerProps> = ({
 
     try {
       const parsed = await parseUploadedDocxFile(file);
-      
       setFormData(prev => ({
         ...prev,
-        fileName: parsed.fileName,
+        nome: prev.nome || file.name.replace(/\.docx$/i, '').replace(/[-_]/g, ' '),
+        fileName: file.name,
         fileBase64: parsed.fileBase64,
         rawText: parsed.rawText,
         contentHtml: parsed.contentHtml,
         tags: parsed.tags,
-        nome: prev.nome || parsed.fileName.replace(/\.docx$/i, '').replace(/_/g, ' '),
       }));
-
-      // Avança para o Passo 2 (Tela de Reconhecimento)
       setWizardStep(2);
     } catch (err: any) {
-      console.error('Erro ao analisar arquivo .docx:', err);
-      setUploadError('Não foi possível ler o arquivo .docx. Verifique se o arquivo não está corrompido ou protegido com senha.');
+      setUploadError(err.message || 'Erro ao ler o documento Word.');
     } finally {
       setIsProcessingFile(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  // Substituir arquivo de um modelo existente
-  const handleReplaceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !replacingTemplateId) return;
-
-    if (!file.name.toLowerCase().endsWith('.docx')) {
-      alert('Selecione um arquivo .docx válido.');
-      return;
-    }
-
-    try {
-      const parsed = await parseUploadedDocxFile(file);
-      const updated = templates.map(tpl => {
-        if (tpl.id === replacingTemplateId) {
-          return {
-            ...tpl,
-            fileName: parsed.fileName,
-            fileBase64: parsed.fileBase64,
-            rawText: parsed.rawText,
-            contentHtml: parsed.contentHtml,
-            tags: parsed.tags,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return tpl;
-      });
-      onSaveTemplates(updated);
-      alert('Arquivo do modelo substituído com sucesso!');
-    } catch (err) {
-      console.error('Erro ao substituir arquivo:', err);
-      alert('Erro ao processar o novo arquivo .docx.');
-    } finally {
-      setReplacingTemplateId(null);
-      if (replaceFileInputRef.current) {
-        replaceFileInputRef.current.value = '';
-      }
-    }
-  };
-
-  // Atualizar mapeamento de um campo na tabela do Passo 2
-  const handleMapField = (rawTag: string, systemFieldId: string) => {
-    const systemField = SYSTEM_FIELDS_CATALOG.find(f => f.id === systemFieldId);
-
-    setFormData(prev => {
-      const newTags = prev.tags.map(tag => {
-        if (tag.rawTag === rawTag) {
-          return {
-            ...tag,
-            systemFieldId,
-            systemFieldLabel: systemField ? systemField.label : 'Não mapeado',
-            status: systemField ? ('reconhecido' as const) : ('nao_reconhecido' as const),
-          };
-        }
-        return tag;
-      });
-
-      const newCustomMappings = {
-        ...prev.customMappings,
-        [rawTag]: systemFieldId,
-      };
-
-      return {
-        ...prev,
-        tags: newTags,
-        customMappings: newCustomMappings,
-      };
-    });
-  };
-
-  // Salvar mapeamento customizado via modal [CADASTRAR CAMPO]
-  const handleSaveCustomFieldMapping = () => {
-    const { rawTag, selectedSystemFieldId, customValue } = customFieldModal;
-    const systemField = SYSTEM_FIELDS_CATALOG.find(f => f.id === selectedSystemFieldId);
-
-    setFormData(prev => {
-      const newTags = prev.tags.map(tag => {
-        if (tag.rawTag === rawTag) {
-          return {
-            ...tag,
-            systemFieldId: selectedSystemFieldId,
-            systemFieldLabel: systemField ? systemField.label : 'Valor Fixo / Personalizado',
-            status: 'reconhecido' as const,
-            customDefaultValue: customValue,
-          };
-        }
-        return tag;
-      });
-
-      const newCustomMappings = {
-        ...prev.customMappings,
-        [rawTag]: selectedSystemFieldId || customValue,
-      };
-
-      return {
-        ...prev,
-        tags: newTags,
-        customMappings: newCustomMappings,
-      };
-    });
-
-    setCustomFieldModal({
-      isOpen: false,
-      rawTag: '',
-      cleanTag: '',
-      selectedSystemFieldId: '',
-      customValue: '',
-    });
-  };
-
-  // Salvar modelo no array e persistir
+  // Salvar modelo final
   const handleSaveTemplate = () => {
     if (!formData.nome.trim()) {
-      alert('Por favor, informe o nome do modelo.');
+      alert('Por favor, preencha o nome do modelo.');
       return;
     }
 
-    if (!formData.rawText && !formData.contentHtml) {
-      alert('O modelo deve conter o conteúdo do arquivo Word.');
-      return;
-    }
-
-    const templateToSave: DocumentTemplate = {
-      id: editingTemplateId || `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      nome: formData.nome.trim(),
-      tipoDocumento: formData.tipoDocumento,
-      descricao: formData.descricao.trim(),
-      fileName: formData.fileName || 'DOCUMENTO_WORD.docx',
-      fileBase64: formData.fileBase64,
-      rawText: formData.rawText,
-      contentHtml: formData.contentHtml,
-      tags: formData.tags,
-      customMappings: formData.customMappings,
-      isDefault: false,
-      createdAt: editingTemplateId 
-        ? (templates.find(t => t.id === editingTemplateId)?.createdAt || new Date().toISOString())
-        : new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    let updatedTemplates: DocumentTemplate[];
+    const now = new Date().toISOString();
     if (editingTemplateId) {
-      updatedTemplates = templates.map(t => t.id === editingTemplateId ? templateToSave : t);
+      const updated = templates.map(t => {
+        if (t.id === editingTemplateId) {
+          return {
+            ...t,
+            nome: formData.nome,
+            tipoDocumento: formData.tipoDocumento,
+            descricao: formData.descricao,
+            fileName: formData.fileName,
+            fileBase64: formData.fileBase64 || t.fileBase64,
+            rawText: formData.rawText || t.rawText,
+            contentHtml: formData.contentHtml || t.contentHtml,
+            tags: formData.tags,
+            customMappings: formData.customMappings,
+            updatedAt: now,
+          };
+        }
+        return t;
+      });
+      onSaveTemplates(updated);
     } else {
-      updatedTemplates = [templateToSave, ...templates];
+      const newTpl: DocumentTemplate = {
+        id: `tpl_${Date.now()}`,
+        nome: formData.nome,
+        tipoDocumento: formData.tipoDocumento,
+        descricao: formData.descricao,
+        fileName: formData.fileName,
+        fileBase64: formData.fileBase64,
+        rawText: formData.rawText,
+        contentHtml: formData.contentHtml,
+        tags: formData.tags,
+        customMappings: formData.customMappings,
+        isDefault: false,
+        ativo: true,
+        createdAt: now,
+        updatedAt: now,
+      };
+      onSaveTemplates([newTpl, ...templates]);
     }
 
-    onSaveTemplates(updatedTemplates);
     setIsModalOpen(false);
   };
 
-  // Filtragem dos modelos na tela
-  const filteredTemplates = templates.filter(tpl => {
-    const matchType = filterTipo === 'all' || tpl.tipoDocumento === filterTipo;
-    const matchSearch = tpl.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (tpl.descricao && tpl.descricao.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      tpl.fileName.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchType && matchSearch;
-  });
-
-  const getTipoLabel = (tipo: TipoModeloDocumento) => {
-    switch (tipo) {
-      case 'recibo_quitacao':
-      case 'venda_a_vista':
-      case 'recibo':
-      case 'terreno_a_vista':
-        return 'Recibo de Quitação (À Vista)';
-      case 'compromisso_parcelado':
-      case 'venda_parcelada':
-      case 'terreno_parcelado':
-        return 'Compromisso de Compra e Venda';
-      case 'exclusividade_casas':
-      case 'contrato':
-      case 'corretagem_exclusividade':
-        return 'Contrato de Exclusividade';
-      default:
-        return 'Modelo';
-    }
-  };
-
-  const getTipoBadgeColor = (tipo: TipoModeloDocumento) => {
-    switch (tipo) {
-      case 'recibo_quitacao':
-      case 'venda_a_vista':
-      case 'recibo':
-      case 'terreno_a_vista':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-      case 'compromisso_parcelado':
-      case 'venda_parcelada':
-      case 'terreno_parcelado':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'exclusividade_casas':
-      case 'contrato':
-      case 'corretagem_exclusividade':
-        return 'bg-purple-100 text-purple-800 border-purple-300';
-      default:
-        return 'bg-slate-100 text-slate-800 border-slate-300';
-    }
-  };
-
-  return (
-    <div className="w-full max-w-7xl mx-auto space-y-6">
-      {/* Input invisível para substituição rápida de arquivo */}
-      <input
-        type="file"
-        ref={replaceFileInputRef}
-        onChange={handleReplaceFileChange}
-        accept=".docx"
-        className="hidden"
-      />
-
-      {/* Top Banner & Ações */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                {isSettingsMode ? 'Gerenciador de Modelos Word (.docx)' : 'Modelos de Contratos e Recibos'}
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {isSettingsMode 
-                  ? 'Cadastre novos modelos Word (.docx), reconheça tags e mapeie variáveis do sistema para geração automática de contratos.'
-                  : 'Selecione um modelo oficial (Recibo de Quitação, Compromisso de Compra e Venda ou Contrato de Exclusividade) para preenchimento imediato.'
-                }
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Botão de Adicionar Modelo (Visível SOMENTE em Configurações) */}
-        {isSettingsMode && (
+  // Se o usuário estiver no gerador modular de exclusividade, renderiza diretamente
+  if (activeSubTab === 'exclusividade_modular') {
+    return (
+      <div className="space-y-4">
+        {/* Barra superior de retorno aos Cards */}
+        <div className="max-w-7xl mx-auto flex items-center justify-between bg-white px-5 py-3 rounded-2xl border-2 border-slate-200 shadow-xs">
           <button
             type="button"
-            onClick={handleOpenNewModal}
-            className="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-4 py-2.5 rounded-xl font-semibold text-sm shadow-sm transition-all cursor-pointer whitespace-nowrap"
+            onClick={() => setActiveSubTab('cards')}
+            className="flex items-center space-x-2 text-xs font-bold text-slate-700 hover:text-emerald-700 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition-all cursor-pointer border border-slate-300 shadow-xs"
           >
-            <Plus className="w-4 h-4" />
-            <span>+ ADICIONAR MODELO DE DOCUMENTO</span>
+            <ArrowLeft className="w-4 h-4" />
+            <span>Voltar para Modelos e Documentos</span>
           </button>
-        )}
-      </div>
 
-      {/* Barra de Filtros e Busca */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
-          {[
-            { id: 'all', label: 'Todos os Modelos' },
-            { id: 'recibo_quitacao', label: 'Recibo de Quitação (À Vista)' },
-            { id: 'compromisso_parcelado', label: 'Compromisso de Compra e Venda' },
-            { id: 'exclusividade_casas', label: 'Contrato de Exclusividade' },
-          ].map(tab => (
+          <div className="flex items-center space-x-2 text-xs font-mono text-slate-500">
+            <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold px-2.5 py-0.5 rounded-md flex items-center">
+              <ShieldCheck className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+              GERADOR DE EXCLUSIVIDADE
+            </span>
+          </div>
+        </div>
+
+        {/* Gerador Modular Oficial */}
+        <ModularContractGenerator
+          currentUser={currentUser}
+          wordTemplates={templates}
+          clientes={clientes}
+          empreendimentos={empreendimentos}
+          corretores={corretores}
+          sales={sales}
+          onOpenDigitalSignatureFlow={onOpenDigitalSignatureFlow}
+          onNavigateToTemplates={() => setActiveSubTab('cards')}
+        />
+      </div>
+    );
+  }
+
+  // Filtragem dos modelos .docx cadastrados
+  const filteredTemplates = templates.filter(t => {
+    const matchTipo = filterTipo === 'all' || t.tipoDocumento === filterTipo;
+    const matchSearch = t.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        t.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        (t.descricao && t.descricao.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchTipo && matchSearch;
+  });
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6 pb-12">
+      {/* 1. CABEÇALHO UNIFICADO DE MODELOS E DOCUMENTOS */}
+      <div className="bg-white rounded-2xl p-6 sm:p-7 border-2 border-slate-200 border-l-4 border-l-emerald-600 shadow-sm relative">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-mono font-bold px-2.5 py-0.5 rounded-md flex items-center">
+                <FileText className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                CENTRAL DE CONTRATOS
+              </span>
+              <span className="text-[11px] text-slate-500 font-mono">
+                Modelos & Documentos Oficiais
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-slate-900 tracking-tight">
+              Modelos e Documentos
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-600 max-w-3xl">
+              Local exclusivo para emissão e geração de contratos em DOCX/PDF, histórico unificado e autenticação de assinaturas digitais.
+            </p>
+          </div>
+
+          {/* Abas de Navegação Interna */}
+          <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
             <button
-              key={tab.id}
               type="button"
-              onClick={() => setFilterTipo(tab.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                filterTipo === tab.id
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200'
+              onClick={() => setActiveSubTab('cards')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1.5 cursor-pointer ${
+                activeSubTab === 'cards'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
               }`}
             >
-              {tab.label}
+              <FileCheck className="w-4 h-4" />
+              <span>Modelos Disponíveis</span>
             </button>
-          ))}
-        </div>
 
-        <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Buscar modelo ou arquivo..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-
-      {/* Grid de Modelos Salvos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredTemplates.map(tpl => {
-          const recognizedCount = tpl.tags.filter(t => t.status === 'reconhecido').length;
-          const totalTags = tpl.tags.length;
-
-          return (
-            <div 
-              key={tpl.id}
-              className="bg-white rounded-2xl border border-slate-200 hover:border-blue-300 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('historico')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1.5 cursor-pointer ${
+                activeSubTab === 'historico'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
             >
-              <div>
-                {/* Header do Card */}
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${getTipoBadgeColor(tpl.tipoDocumento)}`}>
-                    {getTipoLabel(tpl.tipoDocumento)}
-                  </span>
+              <History className="w-4 h-4" />
+              <span>Histórico Central</span>
+            </button>
 
-                  {tpl.isDefault && (
-                    <span className="text-[10px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                      Padrão de Fábrica
-                    </span>
-                  )}
-                </div>
-
-                {/* Título & Arquivo */}
-                <div className="flex items-start space-x-3 mb-3">
-                  <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-blue-600 transition-colors">
-                      {tpl.nome}
-                    </h3>
-                    <p className="text-[11px] font-mono text-slate-600 mt-0.5 flex items-center">
-                      <span className="truncate max-w-[180px]">{tpl.fileName}</span>
-                    </p>
-                  </div>
-                </div>
-
-                {tpl.descricao && (
-                  <p className="text-xs text-slate-600 mb-3 line-clamp-2">
-                    {tpl.descricao}
-                  </p>
-                )}
-
-                {/* Status das Variáveis */}
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 mb-4 flex items-center justify-between text-xs font-mono">
-                  <span className="text-slate-600">Variáveis Mapeadas:</span>
-                  <span className="font-bold text-emerald-700 flex items-center">
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                    {recognizedCount} de {totalTags} campos
-                  </span>
-                </div>
-              </div>
-
-              {/* Botões de Ação do Modelo */}
-              <div className="border-t border-slate-100 pt-3 space-y-2">
-                {/* Botão Gerar Documento */}
-                <button
-                  type="button"
-                  onClick={() => onOpenGenerator(tpl)}
-                  className="w-full flex items-center justify-center space-x-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>Gerar Documento com este Modelo</span>
-                </button>
-
-                {/* Ações secundárias */}
-                {isSettingsMode ? (
-                  /* Painel Completo de Gerenciamento em Configurações */
-                  <div className="grid grid-cols-5 gap-1 pt-1">
-                    <button
-                      type="button"
-                      title="Visualizar Modelo"
-                      onClick={() => setViewingTemplate(tpl)}
-                      className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-xs font-medium cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Editar Informações e Mapeamentos"
-                      onClick={() => handleEditTemplate(tpl)}
-                      className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-xs font-medium cursor-pointer"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Duplicar Modelo"
-                      onClick={() => handleDuplicateTemplate(tpl)}
-                      className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-xs font-medium cursor-pointer"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Substituir Arquivo .docx"
-                      onClick={() => {
-                        setReplacingTemplateId(tpl.id);
-                        if (replaceFileInputRef.current) {
-                          replaceFileInputRef.current.click();
-                        }
-                      }}
-                      className="flex items-center justify-center p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-xs font-medium cursor-pointer"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Excluir Modelo"
-                      onClick={() => handleDeleteTemplate(tpl.id, tpl.nome)}
-                      className="flex items-center justify-center p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 text-xs font-medium cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  /* Visualização simples na aba de Contratos */
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setViewingTemplate(tpl)}
-                      className="w-full flex items-center justify-center space-x-1.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 text-xs font-medium cursor-pointer transition-all"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Pré-visualizar Modelo e Variáveis</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('modelos_docx')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1.5 cursor-pointer ${
+                activeSubTab === 'modelos_docx'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>Gerenciar .docx</span>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {filteredTemplates.length === 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
-          <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800">Nenhum modelo encontrado</h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-            Clique no botão acima para adicionar um novo modelo de documento Word (.docx) à sua biblioteca.
-          </p>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL PRINCIPAL: CADASTRO / EDIÇÃO DO MODELO WORD COM WIZARD DE 3 PASSOS */}
-      {/* ========================================================================= */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full my-8 flex flex-col max-h-[90vh]">
-            
-            {/* Header do Wizard */}
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70 shrink-0">
+      {/* 2. SUB-ABA: OS 3 CARDS INICIAIS OBRIGATÓRIOS (À VISTA, PARCELADO, EXCLUSIVIDADE) */}
+      {activeSubTab === 'cards' && (
+        <div className="space-y-8">
+          <div>
+            <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-                  <FileText className="w-4 h-4 text-blue-600" />
-                  <span>{editingTemplateId ? 'Editar Modelo de Documento' : 'Cadastro do Modelo Word (.docx)'}</span>
+                <h2 className="text-lg font-heading font-extrabold text-slate-900">
+                  Modelos Oficiais de Contratos
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {wizardStep === 1 && 'Passo 1 de 3: Identificação e Envio do Arquivo'}
-                  {wizardStep === 2 && 'Passo 2 de 3: Reconhecimento e Mapeamento de Campos'}
-                  {wizardStep === 3 && 'Passo 3 de 3: Pré-visualização e Confirmação'}
+                <p className="text-xs text-slate-500 font-mono">
+                  Selecione o modelo desejado para abrir o gerador correspondente e emitir o contrato.
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
 
-            {/* Stepper Visual */}
-            <div className="px-6 py-3 bg-slate-100/60 border-b border-slate-200 flex items-center justify-between text-xs font-semibold shrink-0">
-              <div className={`flex items-center space-x-2 ${wizardStep >= 1 ? 'text-blue-600' : 'text-slate-400'}`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${wizardStep >= 1 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                  1
-                </div>
-                <span>Envio do Word</span>
-              </div>
-              <div className="h-0.5 flex-1 mx-3 bg-slate-200" />
-              <div className={`flex items-center space-x-2 ${wizardStep >= 2 ? 'text-blue-600' : 'text-slate-400'}`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${wizardStep >= 2 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                  2
-                </div>
-                <span>Reconhecimento de Campos</span>
-              </div>
-              <div className="h-0.5 flex-1 mx-3 bg-slate-200" />
-              <div className={`flex items-center space-x-2 ${wizardStep >= 3 ? 'text-blue-600' : 'text-slate-400'}`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${wizardStep >= 3 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                  3
-                </div>
-                <span>Pré-visualização</span>
-              </div>
-            </div>
-
-            {/* Conteúdo Dinâmico do Wizard com Scroll */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+            {/* GRID DOS 3 CARDS OBRIGATÓRIOS */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
-              {/* ========================================================= */}
-              {/* PASSO 1: DADOS BÁSICOS E ENVIO DO ARQUIVO .DOCX           */}
-              {/* ========================================================= */}
-              {wizardStep === 1 && (
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Nome do Modelo */}
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-slate-800">
-                        Nome do modelo: <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Recibo de Quitação — Venda à Vista"
-                        value={formData.nome}
-                        onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                      />
-                    </div>
-
-                    {/* Tipo de Documento */}
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-slate-800">
-                        Tipo de documento: <span className="text-rose-500">*</span>
-                      </label>
-                      <select
-                        value={formData.tipoDocumento}
-                        onChange={(e) => setFormData({ ...formData, tipoDocumento: e.target.value as TipoModeloDocumento })}
-                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                      >
-                        <option value="recibo_quitacao">Recibo de Quitação (À Vista)</option>
-                        <option value="compromisso_parcelado">Compromisso de Compra e Venda (Parcelada)</option>
-                        <option value="exclusividade_casas">Contrato de Exclusividade (Venda de Casas)</option>
-                        <option value="outro">Outro Modelo</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Descrição Opcional */}
-                  <div className="space-y-1">
-                    <label className="block text-xs font-bold text-slate-800">
-                      Descrição ou Observações (opcional):
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Contrato padrão utilizado para lotes com parcelamento direto em até 120x"
-                      value={formData.descricao}
-                      onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {/* Área de Seleção do Arquivo Word */}
-                  <div className="space-y-2 pt-2">
-                    <label className="block text-xs font-bold text-slate-800">
-                      Arquivo do modelo (.docx): <span className="text-rose-500">*</span>
-                    </label>
-
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      accept=".docx"
-                      className="hidden"
-                    />
-
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/40 hover:bg-blue-50/80 rounded-2xl p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center space-y-3"
-                    >
-                      <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center shadow-xs">
-                        <Upload className="w-6 h-6" />
-                      </div>
-                      
-                      <div>
-                        <button
-                          type="button"
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-xs cursor-pointer inline-flex items-center space-x-2"
-                        >
-                          <FileText className="w-4 h-4" />
-                          <span>[ SELECIONAR ARQUIVO WORD ]</span>
-                        </button>
-                        <p className="text-xs text-slate-500 mt-2">
-                          Aceitar: <span className="font-bold text-slate-700 font-mono">.docx</span> (Microsoft Word)
-                        </p>
-                      </div>
-
-                      {formData.fileName && (
-                        <div className="bg-white border border-emerald-300 rounded-xl px-4 py-2 flex items-center space-x-2 text-xs font-mono font-bold text-emerald-800 shadow-xs">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>Arquivo carregado: {formData.fileName}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {uploadError && (
-                      <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-xs flex items-center space-x-2">
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        <span>{uploadError}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Orientações sobre variáveis no Word */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs space-y-2">
-                    <h4 className="font-bold text-slate-800 flex items-center space-x-1.5">
-                      <HelpCircle className="w-4 h-4 text-blue-600" />
-                      <span>Como preparar o documento no Microsoft Word</span>
-                    </h4>
-                    <p className="text-slate-600 leading-relaxed">
-                      O sistema reconhece tanto o novo padrão recomendado quanto o padrão antigo já utilizado nos seus contratos existentes:
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      <div className="bg-white border border-slate-200 rounded-xl p-3">
-                        <span className="font-bold text-blue-700 block mb-1">Novo padrão recomendado:</span>
-                        <code className="text-[11px] font-mono text-slate-700 block">
-                          {'{vendedor}'}, {'{cpf}'}, {'{valor_total}'}, {'{valor_total_extenso}'}, {'{lote}'}, {'{quadra}'}, {'{empreendimento}'}, {'{data_contrato}'}
-                        </code>
-                      </div>
-                      <div className="bg-white border border-slate-200 rounded-xl p-3">
-                        <span className="font-bold text-emerald-700 block mb-1">Padrão existente aceito:</span>
-                        <code className="text-[11px] font-mono text-slate-700 block">
-                          [VENDEDOR], [CPF], [VALOR_TOTAL], [VALOR_TOTAL_EXTENSO], [LOTE], [QUADRA], [ENTRADA], [RESTANTE], [QUANTIDADEPARCELAS]
-                        </code>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ========================================================= */}
-              {/* PASSO 2: TELA DE RECONHECIMENTO DE CAMPOS                  */}
-              {/* ========================================================= */}
-              {wizardStep === 2 && (
+              {/* CARD 1: À VISTA */}
+              <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-emerald-500 shadow-sm transition-all duration-200 flex flex-col justify-between group hover:shadow-md">
                 <div className="space-y-4">
-                  <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-4 flex items-start space-x-3">
-                    <Sparkles className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-xs font-bold text-blue-950">
-                        Campos encontrados no documento Word
-                      </h4>
-                      <p className="text-xs text-blue-800 mt-0.5">
-                        O sistema analisou o seu contrato e identificou as variáveis abaixo. Caso algum campo não tenha sido reconhecido automaticamente, você pode cadastrá-lo ou mapeá-lo manualmente.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Tabela de Campos Encontrados */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100/80 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider">
-                        <tr>
-                          <th className="py-2.5 px-4">Campo encontrado</th>
-                          <th className="py-2.5 px-4">Campo do sistema</th>
-                          <th className="py-2.5 px-4">Status</th>
-                          <th className="py-2.5 px-4 text-right">Ação</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {formData.tags.map((tag, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
-                            <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                              <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200">
-                                {tag.rawTag}
-                              </span>
-                            </td>
-
-                            <td className="py-3 px-4">
-                              <select
-                                value={tag.systemFieldId}
-                                onChange={(e) => handleMapField(tag.rawTag, e.target.value)}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                              >
-                                <option value="">-- Selecione o campo correspondente --</option>
-                                {SYSTEM_FIELDS_CATALOG.map(f => (
-                                  <option key={f.id} value={f.id}>
-                                    [{f.category}] {f.label} ({f.exampleValue})
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-
-                            <td className="py-3 px-4">
-                              {tag.status === 'reconhecido' && tag.systemFieldId ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                  <Check className="w-3 h-3 mr-1" /> Reconhecido
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                                  <AlertCircle className="w-3 h-3 mr-1" /> Campo não reconhecido
-                                </span>
-                              )}
-                            </td>
-
-                            <td className="py-3 px-4 text-right">
-                              {tag.status !== 'reconhecido' || !tag.systemFieldId ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setCustomFieldModal({
-                                    isOpen: true,
-                                    rawTag: tag.rawTag,
-                                    cleanTag: tag.cleanTag,
-                                    selectedSystemFieldId: '',
-                                    customValue: '',
-                                  })}
-                                  className="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-all"
-                                >
-                                  [CADASTRAR CAMPO]
-                                </button>
-                              ) : (
-                                <span className="text-[11px] text-slate-600 font-mono">
-                                  {tag.systemFieldLabel}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-
-                        {formData.tags.length === 0 && (
-                          <tr>
-                            <td colSpan={4} className="py-8 text-center text-slate-500">
-                              Nenhuma variável <code className="font-mono">[CAMPO]</code> ou <code className="font-mono">{'{campo}'}</code> foi identificada no arquivo.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* ========================================================= */}
-              {/* PASSO 3: PRÉ-VISUALIZAÇÃO DO DOCUMENTO                     */}
-              {/* ========================================================= */}
-              {wizardStep === 3 && (
-                <div className="space-y-4">
-                  <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold text-emerald-950">
-                        Pré-visualização do Modelo: {formData.nome}
-                      </h4>
-                      <p className="text-xs text-emerald-800 mt-0.5">
-                        Confira se os campos foram identificados corretamente antes de salvar o modelo.
-                      </p>
-                    </div>
-                    <span className="text-xs font-bold bg-white text-emerald-800 px-3 py-1 rounded-lg border border-emerald-300">
-                      {formData.tags.filter(t => t.status === 'reconhecido').length} Campos Prontos
+                  <div className="flex items-start justify-between">
+                    <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-mono text-[11px] font-bold px-2.5 py-1 rounded-lg">
+                      PAGAMENTO INTEGRAL
                     </span>
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200">
+                      <DollarSign className="w-5 h-5" />
+                    </div>
                   </div>
 
-                  {/* Documento Renderizado em Folha A4 */}
-                  <div className="bg-slate-100 p-6 rounded-2xl border border-slate-300 overflow-x-auto">
-                    <div 
-                      className="bg-white shadow-md rounded-lg p-8 mx-auto max-w-2xl min-h-[500px] text-slate-900"
-                      dangerouslySetInnerHTML={{ 
-                        __html: formData.contentHtml || `<pre className="whitespace-pre-wrap font-sans text-xs">${formData.rawText}</pre>` 
-                      }} 
-                    />
+                  <div>
+                    <h3 className="text-xl font-heading font-black text-slate-900 tracking-tight group-hover:text-emerald-700 transition-colors">
+                      À VISTA
+                    </h3>
+                    <p className="text-xs font-mono text-slate-500 mt-0.5">
+                      Recibo de Quitação & Compra e Venda
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed font-sans">
+                    Emissão de contrato e recibo oficial de quitação para transações com pagamento total à vista, com identificação das partes e do imóvel.
+                  </p>
+
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5 text-[11px] font-mono text-slate-600">
+                    <div className="flex items-center space-x-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Minuta em DOCX e PDF</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Quitação Imediata Registrada</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Assinatura Digital Integrada</span>
+                    </div>
                   </div>
                 </div>
-              )}
 
-            </div>
-
-            {/* Footer do Modal com Botões de Navegação */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/80 flex items-center justify-between shrink-0">
-              {wizardStep > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setWizardStep((prev) => (prev - 1) as any)}
-                  className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>[VOLTAR]</span>
-                </button>
-              ) : (
-                <div />
-              )}
-
-              <div className="flex items-center space-x-2">
-                {wizardStep === 1 && (
+                {/* BOTÃO OBRIGATÓRIO [ GERAR CONTRATO ] */}
+                <div className="pt-6 mt-6 border-t border-slate-100">
                   <button
                     type="button"
-                    disabled={!formData.fileName && !formData.rawText}
-                    onClick={() => {
-                      if (!formData.nome.trim()) {
-                        alert('Informe o nome do modelo.');
-                        return;
-                      }
-                      setWizardStep(2);
-                    }}
-                    className="flex items-center space-x-1.5 px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white cursor-pointer shadow-xs"
+                    onClick={handleOpenAVistaGenerator}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-heading font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center space-x-2 cursor-pointer border border-emerald-600 active:scale-98"
                   >
-                    <span>Avançar para Reconhecimento</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 text-emerald-200" />
+                    <span>GERAR CONTRATO</span>
                   </button>
-                )}
+                </div>
+              </div>
 
-                {wizardStep === 2 && (
+              {/* CARD 2: PARCELADO */}
+              <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-blue-500 shadow-sm transition-all duration-200 flex flex-col justify-between group hover:shadow-md">
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between">
+                    <span className="bg-blue-50 text-blue-800 border border-blue-300 font-mono text-[11px] font-bold px-2.5 py-1 rounded-lg">
+                      FINANCIAMENTO DIRETO
+                    </span>
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-xl font-heading font-black text-slate-900 tracking-tight group-hover:text-blue-700 transition-colors">
+                      PARCELADO
+                    </h3>
+                    <p className="text-xs font-mono text-slate-500 mt-0.5">
+                      Compromisso de Compra e Venda
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed font-sans">
+                    Emissão de compromisso parcelado com detalhamento de entrada, quantidade de parcelas mensais, juros, índices de reajuste e vencimentos.
+                  </p>
+
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5 text-[11px] font-mono text-slate-600">
+                    <div className="flex items-center space-x-1.5">
+                      <Check className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Cálculo Automático de Parcelas</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <Check className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Reajuste Monetário (IPCA/IGP-M)</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <Check className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Assinatura Digital Integrada</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* BOTÃO OBRIGATÓRIO [ GERAR CONTRATO ] */}
+                <div className="pt-6 mt-6 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={() => setWizardStep(3)}
-                    className="flex items-center space-x-1.5 px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs"
+                    onClick={handleOpenParceladoGenerator}
+                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-heading font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center space-x-2 cursor-pointer border border-blue-600 active:scale-98"
                   >
-                    <span>Avançar para Pré-visualização</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 text-blue-200" />
+                    <span>GERAR CONTRATO</span>
                   </button>
-                )}
+                </div>
+              </div>
 
-                {wizardStep === 3 && (
+              {/* CARD 3: EXCLUSIVIDADE */}
+              <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-slate-900 shadow-sm transition-all duration-200 flex flex-col justify-between group hover:shadow-md">
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between">
+                    <span className="bg-slate-100 text-slate-800 border border-slate-300 font-mono text-[11px] font-bold px-2.5 py-1 rounded-lg">
+                      CORRETAGEM & EXCLUSIVIDADE
+                    </span>
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-300">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-xl font-heading font-black text-slate-900 tracking-tight group-hover:text-emerald-700 transition-colors">
+                      EXCLUSIVIDADE
+                    </h3>
+                    <p className="text-xs font-mono text-slate-500 mt-0.5">
+                      Gerador Modular com Blocos Opcionais
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed font-sans">
+                    Gerador modular com blocos opcionais de contratante, imóvel, dados comerciais, comissão calculada, autorizações de divulgação e link direto.
+                  </p>
+
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5 text-[11px] font-mono text-slate-600">
+                    <div className="flex items-center space-x-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Blocos e Campos Configuráveis</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Cálculo de Prazo & Corretagem</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Link de Preenchimento WhatsApp</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* BOTÃO OBRIGATÓRIO [ GERAR CONTRATO ] */}
+                <div className="pt-6 mt-6 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={handleSaveTemplate}
-                    className="flex items-center space-x-1.5 px-6 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white cursor-pointer shadow-sm"
+                    onClick={handleOpenExclusividadeGenerator}
+                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-heading font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center space-x-2 cursor-pointer border border-slate-800 active:scale-98"
                   >
-                    <Check className="w-4 h-4" />
-                    <span>[SALVAR MODELO]</span>
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                    <span>GERAR CONTRATO</span>
                   </button>
-                )}
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* MODAL [CADASTRAR CAMPO] PARA CAMPOS NÃO RECONHECIDOS      */}
-      {/* ========================================================= */}
-      {customFieldModal.isOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-60">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-sm flex items-center space-x-1.5">
-                <FileCheck className="w-4 h-4 text-blue-600" />
-                <span>Cadastrar Campo Desconhecido</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setCustomFieldModal(prev => ({ ...prev, isOpen: false }))}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600">
-              Informe qual dado do sistema corresponde à variável <strong className="font-mono text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">{customFieldModal.rawTag}</strong> encontrada no seu Word:
-            </p>
-
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-800">
-                  Associar a um Campo do Sistema Imobiliário:
-                </label>
-                <select
-                  value={customFieldModal.selectedSystemFieldId}
-                  onChange={(e) => setCustomFieldModal(prev => ({ ...prev, selectedSystemFieldId: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">-- Escolha a variável do sistema --</option>
-                  {SYSTEM_FIELDS_CATALOG.map(field => (
-                    <option key={field.id} value={field.id}>
-                      [{field.category}] {field.label} ({field.exampleValue})
-                    </option>
-                  ))}
-                </select>
+                </div>
               </div>
 
-              <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-slate-200"></div>
-                <span className="flex-shrink mx-2 text-[10px] text-slate-600 uppercase font-bold">OU valor fixo</span>
-                <div className="flex-grow border-t border-slate-200"></div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-800">
-                  Preencher com Texto / Valor Personalizado Fixo:
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: 1º Ofício de Notas e Protestos"
-                  value={customFieldModal.customValue}
-                  onChange={(e) => setCustomFieldModal(prev => ({ ...prev, customValue: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setCustomFieldModal(prev => ({ ...prev, isOpen: false }))}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={!customFieldModal.selectedSystemFieldId && !customFieldModal.customValue}
-                onClick={handleSaveCustomFieldMapping}
-                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-xs cursor-pointer"
-              >
-                Salvar Mapeamento
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* MODAL DE VISUALIZAÇÃO RÁPIDA DE MODELO                    */}
-      {/* ========================================================= */}
-      {viewingTemplate && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">{viewingTemplate.nome}</h3>
-                <p className="text-xs text-slate-500">{viewingTemplate.fileName} • {getTipoLabel(viewingTemplate.tipoDocumento)}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setViewingTemplate(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto bg-slate-50 border border-slate-200 rounded-xl p-6">
-              <div 
-                className="bg-white p-6 rounded-lg shadow-xs"
-                dangerouslySetInnerHTML={{ 
-                  __html: viewingTemplate.contentHtml || `<pre className="whitespace-pre-wrap font-sans text-xs">${viewingTemplate.rawText}</pre>` 
-                }} 
+      {/* 3. SUB-ABA: HISTÓRICO CENTRAL DE CONTRATOS */}
+      {activeSubTab === 'historico' && (
+        <div className="space-y-5">
+          {/* BUSCA E FILTRO */}
+          <div className="bg-white rounded-xl p-4 border-2 border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                value={historicoSearch}
+                onChange={(e) => setHistoricoSearch(e.target.value)}
+                placeholder="Buscar contrato por cliente, imóvel, tipo ou código..."
+                className="w-full pl-9 pr-4 py-2 rounded-xl windows-input text-xs sm:text-sm placeholder-slate-400 font-mono text-slate-900"
               />
             </div>
 
-            <div className="flex justify-between items-center pt-2">
-              <span className="text-xs text-slate-500">
-                {viewingTemplate.tags.length} variáveis identificadas
+            <div className="flex items-center space-x-2">
+              <select
+                value={historicoStatusFilter}
+                onChange={(e) => setHistoricoStatusFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl windows-input text-xs font-mono cursor-pointer font-bold text-slate-800"
+              >
+                <option value="all">Todos os Tipos e Status</option>
+                <option value="exclusividade">Exclusividade</option>
+                <option value="a_vista">À Vista</option>
+                <option value="parcelado">Parcelado</option>
+                <option value="assinado">Assinados</option>
+              </select>
+            </div>
+          </div>
+
+          {/* LISTA DO HISTÓRICO */}
+          <div className="bg-white rounded-2xl shadow-sm border-2 border-slate-200 overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-slate-700 uppercase">
+                Contratos Emitidos no Sistema ({sales.length + modularContracts.length} registros)
               </span>
-              <div className="flex space-x-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const t = viewingTemplate;
-                    setViewingTemplate(null);
-                    onOpenGenerator(t);
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  Gerar Documento com este Modelo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewingTemplate(null)}
-                  className="bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  Fechar
-                </button>
-              </div>
+              <span className="text-[11px] font-mono text-slate-500">
+                Central Única de Auditoria & Downloads
+              </span>
+            </div>
+
+            <div className="divide-y divide-slate-200">
+              {/* Vendas / Contratos Cadastrados */}
+              {sales.map((sale) => (
+                <div key={sale.id} className="p-4 sm:p-5 hover:bg-slate-50/80 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="bg-slate-100 text-slate-800 border border-slate-300 text-xs font-mono font-bold px-2 py-0.5 rounded">
+                        VENDA #{sale.codigoVenda}
+                      </span>
+                      <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${
+                        sale.financial.tipoPagamento === 'a_vista' 
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300' 
+                          : 'bg-blue-50 text-blue-800 border-blue-300'
+                      }`}>
+                        {sale.financial.tipoPagamento === 'a_vista' ? 'À VISTA' : 'PARCELADO'}
+                      </span>
+                      {sale.signatures.isFullySigned ? (
+                        <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300 flex items-center">
+                          <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" /> Assinado
+                        </span>
+                      ) : (
+                        <span className="text-xs font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 flex items-center">
+                          <Clock className="w-3 h-3 mr-1 text-amber-600" /> Pendente de Assinatura
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="text-sm sm:text-base font-bold text-slate-900 font-heading">
+                      {sale.buyer.nome} — Lote {sale.property.lote}, Q. {sale.property.quadra} ({sale.property.empreendimento})
+                    </h4>
+                    <p className="text-xs font-mono text-slate-500">
+                      Data: {formatDateBR(sale.createdAt)} • Valor: <strong className="text-emerald-700">{formatCurrency(sale.financial.valorTotal)}</strong> • Corretor: {sale.seller.vendedorNome}
+                    </p>
+                  </div>
+
+                  {/* AÇÕES: DOCX, PDF, PDF ASSINADO, VER DOCUMENTO */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onOpenGenerator(undefined, sale, sale.financial.tipoPagamento === 'a_vista' ? 'a_vista' : 'parcelado')}
+                      className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold rounded-lg border border-blue-300 flex items-center space-x-1 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5 text-blue-600" />
+                      <span>[ BAIXAR DOCX ]</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onOpenGenerator(undefined, sale, sale.financial.tipoPagamento === 'a_vista' ? 'a_vista' : 'parcelado')}
+                      className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold rounded-lg border border-emerald-300 flex items-center space-x-1 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>[ BAIXAR PDF ]</span>
+                    </button>
+
+                    {sale.signatures.isFullySigned && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenGenerator(undefined, sale, sale.financial.tipoPagamento === 'a_vista' ? 'a_vista' : 'parcelado')}
+                        className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 text-xs font-bold rounded-lg border border-slate-800 flex items-center space-x-1 cursor-pointer"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>[ BAIXAR PDF ASSINADO ]</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Contratos Modulares de Exclusividade Salvos */}
+              {modularContracts.map((c) => (
+                <div key={c.id} className="p-4 sm:p-5 hover:bg-slate-50/80 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="bg-slate-900 text-white border border-slate-900 text-xs font-mono font-bold px-2 py-0.5 rounded">
+                        EXCLUSIVIDADE
+                      </span>
+                      <span className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
+                        {c.contractId}
+                      </span>
+                      {c.status === 'assinado' ? (
+                        <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300 flex items-center">
+                          <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" /> Assinado
+                        </span>
+                      ) : (
+                        <span className="text-xs font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 flex items-center">
+                          <Clock className="w-3 h-3 mr-1 text-amber-600" /> Aguardando Assinatura
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="text-sm sm:text-base font-bold text-slate-900 font-heading">
+                      {c.contratanteNome} — {c.imovelDescricao || 'Imóvel sob Exclusividade'}
+                    </h4>
+                    <p className="text-xs font-mono text-slate-500">
+                      Data: {formatDateBR(c.createdAt)} • Valor: <strong className="text-emerald-700">{formatCurrency(c.valorVenda || 0)}</strong> • Corretor: {c.corretorNome}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveSubTab('exclusividade_modular')}
+                      className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg border border-slate-800 flex items-center space-x-1 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>[ VER DOCUMENTO ]</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
 
+      {/* 4. SUB-ABA: GERENCIAR MODELOS WORD (.DOCX) */}
+      {activeSubTab === 'modelos_docx' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl p-6 border-2 border-slate-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-heading font-extrabold text-slate-900">
+                Biblioteca de Arquivos .docx
+              </h2>
+              <p className="text-xs text-slate-500 font-mono">
+                Modelos de base para preenchimento automatizado de variáveis e tags do sistema.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleOpenNewModal}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs flex items-center space-x-2 cursor-pointer border border-blue-600"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Cadastrar Novo Modelo .docx</span>
+            </button>
+          </div>
+
+          {/* LISTAGEM DOS MODELOS .DOCX */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredTemplates.map((tpl) => (
+              <div key={tpl.id} className="bg-white rounded-xl p-5 border-2 border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-300">
+                      {tpl.tipoDocumento}
+                    </span>
+                    {tpl.isDefault && (
+                      <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
+                        Padrão
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-heading font-bold text-slate-900 text-sm">{tpl.nome}</h3>
+                  <p className="text-xs font-mono text-slate-500 truncate">{tpl.fileName}</p>
+                </div>
+
+                <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenGenerator(tpl)}
+                    className="flex-1 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 text-xs font-bold rounded-lg border border-blue-200 flex items-center justify-center space-x-1 cursor-pointer"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Usar Modelo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleEditTemplate(tpl)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer"
+                    title="Editar Informações"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDuplicateTemplate(tpl)}
+                    className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer"
+                    title="Duplicar"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+
+                  {!tpl.isDefault && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTemplate(tpl.id, tpl.nome)}
+                      className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200 cursor-pointer"
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CADASTRO / EDIÇÃO DE MODELO .DOCX */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-2xl border-2 border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-50 text-blue-700 border border-blue-300 rounded-xl">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-extrabold text-slate-900 text-base">
+                    {editingTemplateId ? 'Editar Modelo .docx' : 'Cadastrar Novo Modelo .docx'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    Configuração de tags e mapeamentos automáticos
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-800">Nome do Modelo:</label>
+                <input
+                  type="text"
+                  value={formData.nome}
+                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                  placeholder="Ex: Contrato de Compra e Venda à Vista"
+                  className="w-full px-3 py-2 rounded-xl windows-input text-xs font-semibold text-slate-900"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-800">Tipo de Documento:</label>
+                <select
+                  value={formData.tipoDocumento}
+                  onChange={(e) => setFormData({ ...formData, tipoDocumento: e.target.value as any })}
+                  className="w-full px-3 py-2 rounded-xl windows-input text-xs font-semibold text-slate-900 cursor-pointer"
+                >
+                  <option value="recibo_quitacao">Recibo de Quitação / Venda à Vista</option>
+                  <option value="compromisso_parcelado">Compromisso de Compra e Venda Parcelado</option>
+                  <option value="corretagem_exclusividade">Corretagem e Exclusividade</option>
+                  <option value="outro">Outro Modelo</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-800">Arquivo .docx:</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".docx"
+                  onChange={handleFileChange}
+                  className="w-full text-xs font-mono text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                />
+                {formData.fileName && (
+                  <p className="text-[11px] font-mono text-emerald-700 mt-1">
+                    Arquivo carregado: <strong>{formData.fileName}</strong>
+                  </p>
+                )}
+                {uploadError && (
+                  <p className="text-[11px] font-mono text-rose-600 mt-1">{uploadError}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-200 cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveTemplate}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer border border-blue-600"
+              >
+                Salvar Modelo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

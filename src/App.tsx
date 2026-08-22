@@ -15,8 +15,10 @@ import { ClientManager } from './components/ClientManager';
 import { CompanySettings } from './components/CompanySettings';
 import { PublicSignPage } from './components/PublicSignPage';
 import { PublicValidationPage } from './components/PublicValidationPage';
+import { ClientExclusividadeFillSign } from './components/ClientExclusividadeFillSign';
 import { AuthScreen } from './components/AuthScreen';
 import { UserManager } from './components/UserManager';
+import { ModularContractGenerator } from './components/ModularContractGenerator';
 import { 
   AppUser,
   Cliente, 
@@ -94,6 +96,22 @@ export default function App() {
       }
       const params = new URLSearchParams(window.location.search);
       if (params.get('validar')) return params.get('validar');
+    }
+    return null;
+  });
+
+  const [publicExclusivityToken, setPublicExclusivityToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path.startsWith('/contrato/preencher/')) {
+        return path.replace('/contrato/preencher/', '');
+      }
+      if (path.startsWith('/exclusividade/')) {
+        return path.replace('/exclusividade/', '');
+      }
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('preencher')) return params.get('preencher');
+      if (params.get('exclusividade')) return params.get('exclusividade');
     }
     return null;
   });
@@ -622,6 +640,21 @@ export default function App() {
     setCorretores(prev => prev.filter(c => c.id !== corretorId));
   };
 
+  // Visualização direta se acessado via link público de preenchimento e assinatura de exclusividade
+  if (publicExclusivityToken) {
+    return (
+      <ClientExclusividadeFillSign
+        token={publicExclusivityToken}
+        onBackToApp={() => {
+          setPublicExclusivityToken(null);
+          if (typeof window !== 'undefined' && window.history.pushState) {
+            window.history.pushState(null, '', '/');
+          }
+        }}
+      />
+    );
+  }
+
   // Visualização direta se acessado via link público de assinatura
   if (publicSignToken) {
     return (
@@ -765,14 +798,25 @@ export default function App() {
           />
         )}
 
-        {/* 4. CONTRATOS (GERAÇÃO E VISUALIZAÇÃO DE DOCUMENTOS) */}
-        {activeTab === 'word_templates' && (
+        {/* 4. MODELOS & DOCUMENTOS (CENTRAL OFICIAL DE CONTRATOS) */}
+        {(activeTab === 'word_templates' || (activeTab as string) === 'modular_contracts') && (
           <WordTemplateManager
             templates={wordTemplates}
             onSaveTemplates={(newTemplates) => setWordTemplates(newTemplates)}
             sales={sales}
-            onOpenGenerator={(template, sale) => {
-              handleOpenDocGenerator(template, sale);
+            clientes={clientes}
+            empreendimentos={empreendimentos}
+            corretores={corretores}
+            currentUser={currentUser}
+            companyConfig={companyConfig}
+            onOpenGenerator={(template, sale, defaultMode) => {
+              handleOpenDocGenerator(template, sale, defaultMode);
+            }}
+            onOpenDigitalSignatureFlow={(contratoData) => {
+              if (sales.length > 0) {
+                setActiveSale(sales[0]);
+              }
+              setIsSignatureModalOpen(true);
             }}
             isSettingsMode={false}
             onNavigateToSettings={() => {

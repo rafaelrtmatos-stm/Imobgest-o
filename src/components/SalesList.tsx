@@ -11,7 +11,16 @@ import {
   Building2, 
   Edit3,
   Calendar,
-  FileCode2
+  FileCode2,
+  Download,
+  Eye,
+  ShieldCheck,
+  X,
+  Layers,
+  DollarSign,
+  User,
+  History,
+  Check
 } from 'lucide-react';
 import { SaleRecord, StatusVenda } from '../types';
 import { formatCurrency, formatDateBR } from '../utils/formatters';
@@ -38,6 +47,9 @@ export const SalesList: React.FC<SalesListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | StatusVenda>('all');
   const [empreendimentoFilter, setEmpreendimentoFilter] = useState('all');
+  
+  // Modal de detalhes do contrato vinculado
+  const [selectedSaleForContractDetails, setSelectedSaleForContractDetails] = useState<SaleRecord | null>(null);
 
   // Obter lista única de empreendimentos
   const uniqueEmpreendimentos = Array.from(
@@ -62,6 +74,29 @@ export const SalesList: React.FC<SalesListProps> = ({
 
   const totalVendido = sales.reduce((acc, s) => acc + s.financial.valorTotal, 0);
   const totalAssinados = sales.filter(s => s.signatures.isFullySigned).length;
+
+  const handleOpenContractDetails = (sale: SaleRecord) => {
+    setSelectedSaleForContractDetails(sale);
+  };
+
+  const getContractTypeFriendly = (tipo: string) => {
+    switch (tipo) {
+      case 'exclusividade':
+      case 'exclusividade_casas':
+      case 'corretagem_exclusividade':
+        return 'Contrato de Exclusividade';
+      case 'a_vista':
+      case 'compra_venda_a_vista':
+      case 'venda_a_vista':
+      case 'recibo_quitacao_a_vista':
+        return 'Contrato de Compra e Venda à Vista';
+      case 'parcelado':
+      case 'compra_venda_parcelado':
+      case 'venda_parcelada':
+      default:
+        return 'Compromisso de Compra e Venda Parcelado';
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
@@ -232,35 +267,24 @@ export const SalesList: React.FC<SalesListProps> = ({
 
                 {/* BOTÕES DE AÇÃO */}
                 <div className="flex flex-wrap items-center gap-1.5 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-200">
-                  {onGenerateWordDoc && (
-                    <button
-                      type="button"
-                      onClick={() => onGenerateWordDoc(sale)}
-                      className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-semibold rounded-lg transition-colors border border-blue-200 shadow-xs flex items-center space-x-1.5 cursor-pointer"
-                      title="Gerar Documento Word / PDF a partir dos Modelos Cadastrados"
-                    >
-                      <FileCode2 className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Gerar Word/PDF</span>
-                    </button>
-                  )}
-
+                  {/* BOTÃO OBRIGATÓRIO [ VER CONTRATO ] */}
                   <button
                     type="button"
-                    onClick={() => onViewContract(sale)}
-                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg transition-colors border border-slate-300 shadow-xs flex items-center space-x-1.5 cursor-pointer"
-                    title="Visualizar Contrato Padrão"
+                    onClick={() => handleOpenContractDetails(sale)}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors border border-slate-800 shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                    title="Ver Contrato Vinculado & Downloads"
                   >
-                    <FileText className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Contrato</span>
+                    <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>VER CONTRATO</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => onOpenSignatureModal(sale)}
-                    className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer border border-slate-800"
+                    className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-semibold rounded-lg transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer border border-emerald-300"
                     title="Assinar Contrato na Tela"
                   >
-                    <PenTool className="w-3.5 h-3.5 text-emerald-400" />
+                    <PenTool className="w-3.5 h-3.5 text-emerald-700" />
                     <span>Assinar</span>
                   </button>
 
@@ -291,6 +315,174 @@ export const SalesList: React.FC<SalesListProps> = ({
           </div>
         )}
       </div>
+
+      {/* MODAL DE DETALHES DO CONTRATO VINCULADO */}
+      {selectedSaleForContractDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-2xl border-2 border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* CABEÇALHO */}
+            <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-heading font-extrabold text-slate-900">
+                    Contrato Vinculado à Venda
+                  </h2>
+                  <p className="text-xs text-slate-500 font-mono">
+                    Referência: <span className="font-bold text-slate-800">VENDA #{selectedSaleForContractDetails.codigoVenda}</span> | Contrato ID: <span className="text-emerald-700 font-bold">{selectedSaleForContractDetails.id}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedSaleForContractDetails(null)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* CONTEÚDO DOS DETALHES DO CONTRATO */}
+            <div className="p-6 space-y-5 overflow-y-auto flex-1 text-xs font-mono">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 uppercase font-bold block mb-1">Tipo de Contrato</span>
+                  <p className="text-sm font-bold text-slate-900 font-sans">
+                    {getContractTypeFriendly(selectedSaleForContractDetails.tipoContrato)}
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 uppercase font-bold block mb-1">Status da Assinatura</span>
+                  {selectedSaleForContractDetails.signatures.isFullySigned ? (
+                    <span className="text-emerald-700 font-bold flex items-center text-sm font-sans">
+                      <CheckCircle2 className="w-4 h-4 mr-1 text-emerald-600" /> Assinado Digitalmente
+                    </span>
+                  ) : (
+                    <span className="text-amber-700 font-bold flex items-center text-sm font-sans">
+                      <Clock className="w-4 h-4 mr-1 text-amber-600" /> Aguardando Assinatura
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 uppercase font-bold block mb-1">Data de Emissão</span>
+                  <p className="text-sm font-bold text-slate-900">
+                    {formatDateBR(selectedSaleForContractDetails.createdAt)}
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <span className="text-[11px] text-slate-500 uppercase font-bold block mb-1">Cliente / Adquirente</span>
+                  <p className="text-sm font-bold text-slate-900 font-sans">
+                    {selectedSaleForContractDetails.buyer.nome}
+                  </p>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    CPF: {selectedSaleForContractDetails.buyer.cpf}
+                  </p>
+                </div>
+              </div>
+
+              {/* DADOS DO IMÓVEL E FINANCEIRO */}
+              <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-sans">
+                <div>
+                  <span className="text-[11px] text-emerald-900 uppercase font-bold font-mono block">Imóvel Negociado</span>
+                  <p className="text-sm font-bold text-slate-900">
+                    Lote {selectedSaleForContractDetails.property.lote}, Quadra {selectedSaleForContractDetails.property.quadra}
+                  </p>
+                  <p className="text-xs text-slate-600 font-mono">
+                    {selectedSaleForContractDetails.property.empreendimento} ({selectedSaleForContractDetails.property.areaM2} m²)
+                  </p>
+                </div>
+                <div className="text-left sm:text-right font-mono">
+                  <span className="text-[11px] text-emerald-900 uppercase font-bold block">Valor Total</span>
+                  <p className="text-base font-extrabold text-emerald-800">
+                    {formatCurrency(selectedSaleForContractDetails.financial.valorTotal)}
+                  </p>
+                </div>
+              </div>
+
+              {/* ORIGEM E CENTRALIZAÇÃO */}
+              <div className="bg-slate-100 p-3 rounded-xl border border-slate-200 text-slate-600 text-[11px] font-sans">
+                ℹ️ <strong>Origem Centralizada:</strong> Este contrato pertence e foi emitido pelo módulo <strong className="text-slate-900">“Modelos e Documentos”</strong>. A venda armazena sua referência unificada para evitar duplicações.
+              </div>
+            </div>
+
+            {/* BOTÕES DE AÇÃO: DOCX, PDF, PDF ASSINADO, VER DOCUMENTO, HISTÓRICO */}
+            <div className="bg-slate-50 border-t border-slate-200 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {onGenerateWordDoc && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sale = selectedSaleForContractDetails;
+                      setSelectedSaleForContractDetails(null);
+                      onGenerateWordDoc(sale);
+                    }}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>[ BAIXAR DOCX ]</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sale = selectedSaleForContractDetails;
+                    setSelectedSaleForContractDetails(null);
+                    onViewContract(sale);
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>[ BAIXAR PDF ]</span>
+                </button>
+
+                {selectedSaleForContractDetails.signatures.isFullySigned && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sale = selectedSaleForContractDetails;
+                      setSelectedSaleForContractDetails(null);
+                      onViewContract(sale);
+                    }}
+                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer border border-slate-800"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>[ BAIXAR PDF ASSINADO ]</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sale = selectedSaleForContractDetails;
+                    setSelectedSaleForContractDetails(null);
+                    onViewContract(sale);
+                  }}
+                  className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs rounded-xl border border-slate-300 flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5 text-slate-600" />
+                  <span>[ VER DOCUMENTO ]</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedSaleForContractDetails(null)}
+                  className="px-3 py-2 text-slate-600 hover:text-slate-900 font-bold text-xs rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

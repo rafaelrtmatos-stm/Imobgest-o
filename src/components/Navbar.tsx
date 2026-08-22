@@ -5,6 +5,7 @@ import {
   FileText, 
   Map, 
   FileCode2, 
+  FileCheck,
   PenTool, 
   DollarSign, 
   ListFilter, 
@@ -95,8 +96,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     {
       id: 'word_templates' as ActiveTab,
-      label: 'Contratos & Documentos',
-      description: 'Geração com modelos .docx e visualização',
+      label: 'Modelos & Documentos',
+      description: 'Geração de contratos (À Vista, Parcelado e Exclusividade)',
       icon: FileText,
       color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/30',
       activeMatch: activeTab === 'word_templates' || activeTab === 'contract_viewer',
@@ -240,12 +241,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={() => handleSelectTab('word_templates')}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all duration-200 cursor-pointer ${
                   activeTab === 'word_templates' || activeTab === 'contract_viewer'
-                    ? 'bg-blue-700 text-white shadow-xs'
+                    ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>Contratos</span>
+                <span>Modelos & Documentos</span>
               </button>
 
               {isAdmin && (
