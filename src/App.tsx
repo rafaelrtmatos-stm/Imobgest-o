@@ -71,6 +71,10 @@ export default function App() {
     setActiveTab('contratos');
   };
 
+  const handleUpdateContrato = (contrato: Contrato) => {
+    setContratos(prev => prev.map(c => c.id === contrato.id ? { ...contrato, updatedAt: new Date().toISOString() } : c));
+  };
+
   const handleDeleteContract = () => {
     if (!selectedContractId) return;
     if (!confirm('Excluir este contrato e todas as vendas vinculadas a ele?')) return;
@@ -129,6 +133,7 @@ export default function App() {
             onEditContract={handleEditContract}
             onDeleteContract={handleDeleteContract}
             onSaveVendas={setVendas}
+            onUpdateContrato={handleUpdateContrato}
           />
         )}
 

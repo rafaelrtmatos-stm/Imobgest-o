@@ -143,6 +143,19 @@ export async function upsertVendaToSupabase(venda: Venda): Promise<boolean> {
   }
 }
 
+/** Busca um único contrato pelo id — usado pela página pública /assinar/:id. */
+export async function fetchContratoById(id: string): Promise<Contrato | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client.from('contratos').select('data').eq('id', id).single();
+    if (error || !data) return null;
+    return data.data as Contrato;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteFromSupabase(table: 'clientes' | 'contratos' | 'vendas', id: string): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
@@ -284,9 +297,29 @@ CREATE TABLE IF NOT EXISTS public.vendas (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- ==============================================================================
+-- ASSINATURA ELETRÔNICA (OTP) — códigos de verificação por parte do contrato
+-- As partes (vendedor/comprador ou contratante/contratado, + cônjuge) ficam
+-- dentro de contratos.data->'partes' (JSONB). Esta tabela guarda só os
+-- códigos OTP temporários, nunca em texto puro (apenas o hash).
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.verification_codes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    contract_id TEXT NOT NULL REFERENCES public.contratos(id) ON DELETE CASCADE,
+    parte_id TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    is_used BOOLEAN NOT NULL DEFAULT false,
+    used_at TIMESTAMP WITH TIME ZONE,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contratos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vendas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.verification_codes ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
@@ -298,6 +331,111 @@ BEGIN
 
     DROP POLICY IF EXISTS "Allow anon all on vendas" ON public.vendas;
     CREATE POLICY "Allow anon all on vendas" ON public.vendas FOR ALL USING (true) WITH CHECK (true);
+
+    DROP POLICY IF EXISTS "Allow anon all on verification_codes" ON public.verification_codes;
+    CREATE POLICY "Allow anon all on verification_codes" ON public.verification_codes FOR ALL USING (true) WITH CHECK (true);
 END $$;
+
+-- ==============================================================================
+-- RPC: checa os últimos 4 dígitos do CPF/CNPJ de UMA parte, dentro do banco.
+-- O documento/CPF completo nunca trafega até o navegador antes da assinatura.
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION check_contrato_parte_last_digits(
+  p_contract_id text,
+  p_parte_id text,
+  p_last_digits text
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_partes jsonb;
+  v_parte jsonb;
+  v_cpf_cnpj text;
+  v_attempts integer;
+  v_matched boolean;
+BEGIN
+  SELECT data->'partes' INTO v_partes FROM contratos WHERE id = p_contract_id FOR UPDATE;
+  IF v_partes IS NULL THEN
+    RETURN jsonb_build_object('matched', false, 'locked', false, 'attempts_remaining', 0);
+  END IF;
+
+  SELECT p INTO v_parte FROM jsonb_array_elements(v_partes) p WHERE p->>'id' = p_parte_id;
+  IF v_parte IS NULL THEN
+    RETURN jsonb_build_object('matched', false, 'locked', false, 'attempts_remaining', 0);
+  END IF;
+
+  v_cpf_cnpj := v_parte->>'cpfCnpj';
+  v_attempts := coalesce((v_parte->>'checkAttempts')::integer, 0);
+
+  IF v_attempts >= 5 THEN
+    RETURN jsonb_build_object('matched', false, 'locked', true, 'attempts_remaining', 0);
+  END IF;
+
+  v_matched := v_cpf_cnpj IS NOT NULL
+    AND right(regexp_replace(v_cpf_cnpj, '\D', '', 'g'), 4) = p_last_digits;
+
+  IF v_matched THEN
+    v_attempts := 0;
+  ELSE
+    v_attempts := v_attempts + 1;
+  END IF;
+
+  UPDATE contratos SET data = jsonb_set(
+    data, '{partes}',
+    (SELECT jsonb_agg(CASE WHEN p->>'id' = p_parte_id
+        THEN jsonb_set(p, '{checkAttempts}', to_jsonb(v_attempts))
+        ELSE p END)
+     FROM jsonb_array_elements(v_partes) p)
+  ) WHERE id = p_contract_id;
+
+  IF v_matched THEN
+    RETURN jsonb_build_object('matched', true, 'locked', false, 'attempts_remaining', 5);
+  ELSE
+    RETURN jsonb_build_object('matched', false, 'locked', v_attempts >= 5, 'attempts_remaining', greatest(0, 5 - v_attempts));
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION check_contrato_parte_last_digits(text, text, text) TO anon, authenticated;
+
+-- ==============================================================================
+-- RPC: valida o código OTP digitado pelo cliente (hash já calculado no cliente).
+-- Controla tentativas e expiração de forma atômica.
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION validate_verification_code(
+  p_contract_id text,
+  p_parte_id text,
+  p_code_hash text
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_row verification_codes%ROWTYPE;
+BEGIN
+  SELECT * INTO v_row FROM verification_codes
+    WHERE contract_id = p_contract_id AND parte_id = p_parte_id AND is_used = false
+    ORDER BY created_at DESC LIMIT 1 FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'not_found');
+  END IF;
+
+  IF v_row.attempts >= 5 THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'too_many_attempts');
+  END IF;
+
+  IF v_row.expires_at < now() THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'expired');
+  END IF;
+
+  IF v_row.code_hash <> p_code_hash THEN
+    UPDATE verification_codes SET attempts = attempts + 1 WHERE id = v_row.id;
+    RETURN jsonb_build_object('ok', false, 'reason', 'wrong_code');
+  END IF;
+
+  UPDATE verification_codes SET is_used = true, used_at = now() WHERE id = v_row.id;
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION validate_verification_code(text, text, text) TO anon, authenticated;
 `;
 }

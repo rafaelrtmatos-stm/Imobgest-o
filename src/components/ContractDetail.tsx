@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Pencil, Trash2, Plus, ShoppingBag, X } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Plus, ShoppingBag, X, FileSignature } from 'lucide-react';
 import { Cliente, Contrato, StatusVenda, Venda } from '../types';
 import { formatCurrency, formatDate, generateId, todayISO } from '../utils/formatters';
+import { SignatureManager } from './SignatureManager';
 
 interface ContractDetailProps {
   contrato: Contrato;
@@ -11,6 +12,7 @@ interface ContractDetailProps {
   onEditContract: () => void;
   onDeleteContract: () => void;
   onSaveVendas: (vendas: Venda[]) => void;
+  onUpdateContrato: (contrato: Contrato) => void;
 }
 
 const emptyVendaForm = { descricao: '', valor: '', data: todayISO(), status: 'confirmada' as StatusVenda, observacoes: '' };
@@ -21,10 +23,14 @@ const statusColor: Record<string, string> = {
   cancelada: 'bg-red-50 text-red-700 border-red-200',
 };
 
-export function ContractDetail({ contrato, cliente, vendas, onBack, onEditContract, onDeleteContract, onSaveVendas }: ContractDetailProps) {
+export function ContractDetail({ contrato, cliente, vendas, onBack, onEditContract, onDeleteContract, onSaveVendas, onUpdateContrato }: ContractDetailProps) {
   const [isVendaFormOpen, setIsVendaFormOpen] = useState(false);
   const [editingVendaId, setEditingVendaId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyVendaForm);
+  const [isSignatureOpen, setIsSignatureOpen] = useState(false);
+
+  const partesAssinadas = (contrato.partes || []).filter(p => p.signedAt).length;
+  const totalPartes = (contrato.partes || []).length;
 
   const vendasDoContrato = vendas.filter(v => v.contratoId === contrato.id);
   const totalVendas = vendasDoContrato.reduce((sum, v) => sum + (v.valor || 0), 0);
@@ -92,6 +98,13 @@ export function ContractDetail({ contrato, cliente, vendas, onBack, onEditContra
             <p className="text-sm text-slate-500 mt-1">Data do contrato: {formatDate(contrato.dataContrato)}</p>
           </div>
           <div className="flex gap-2">
+            <button onClick={() => setIsSignatureOpen(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg cursor-pointer">
+              <FileSignature className="w-4 h-4" />
+              Assinatura
+              {totalPartes > 0 && (
+                <span className="text-[11px] font-bold">({partesAssinadas}/{totalPartes})</span>
+              )}
+            </button>
             <button onClick={onEditContract} className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer">
               <Pencil className="w-4 h-4" /> Editar
             </button>
@@ -206,6 +219,14 @@ export function ContractDetail({ contrato, cliente, vendas, onBack, onEditContra
           </div>
         </div>
       )}
+      {isSignatureOpen && (
+        <SignatureManager
+          contrato={contrato}
+          onUpdateContrato={(atualizado) => { onUpdateContrato(atualizado); }}
+          onClose={() => setIsSignatureOpen(false)}
+        />
+      )}
+
       <style>{`.input { border: 1px solid #e2e8f0; border-radius: 0.65rem; padding: 0.55rem 0.75rem; font-size: 0.875rem; outline: none; width: 100%; } .input:focus { box-shadow: 0 0 0 2px #10b98166; border-color:#10b981; }`}</style>
     </div>
   );
