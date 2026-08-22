@@ -105,32 +105,30 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-[100dvh] w-full bg-zinc-950 flex flex-col justify-center py-6 sm:py-12 px-4 sm:px-6 lg:px-8 relative overflow-y-auto">
       {/* Background Decorativo Cinza Grafite */}
       <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#52525b_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none" />
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-80 sm:w-96 h-80 sm:h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+      <div className="w-full max-w-md mx-auto relative z-10 my-auto">
         {/* LOGO DO SISTEMA */}
         <div className="flex justify-center">
-          <div className="w-14 h-14 bg-emerald-600 border border-emerald-400 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-zinc-950/80">
-            <Building2 className="w-8 h-8 text-white" />
+          <div className="w-13 h-13 sm:w-14 sm:h-14 bg-emerald-600 border border-emerald-400 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-zinc-950/80">
+            <Building2 className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
           </div>
         </div>
 
-        <h2 className="mt-4 text-center text-2xl sm:text-3xl font-extrabold text-zinc-100 tracking-tight">
+        <h2 className="mt-3.5 sm:mt-4 text-center text-2xl sm:text-3xl font-extrabold text-zinc-100 tracking-tight">
           IMOBGESTÃO <span className="text-emerald-400">PRO</span>
         </h2>
         <p className="mt-1 text-center text-xs sm:text-sm text-zinc-400 font-medium">
           Sistema Imobiliário & Gestão de Contratos e Vendas
         </p>
-      </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0 relative z-10">
-        <div className="bg-zinc-900 border border-zinc-800 py-8 px-6 sm:px-10 shadow-2xl shadow-black/60 rounded-3xl backdrop-blur-md">
+        <div className="mt-6 sm:mt-8 bg-zinc-900 border border-zinc-800 py-6 sm:py-8 px-5 sm:px-10 shadow-2xl shadow-black/60 rounded-2xl sm:rounded-3xl backdrop-blur-md">
           
-          <div className="mb-6 pb-4 border-b border-zinc-800">
-            <h3 className="text-base font-bold text-zinc-100 flex items-center space-x-2">
+          <div className="mb-5 sm:mb-6 pb-3 sm:pb-4 border-b border-zinc-800">
+            <h3 className="text-sm sm:text-base font-bold text-zinc-100 flex items-center space-x-2">
               <KeyRound className="w-4 h-4 text-emerald-400" />
               <span>Acesso ao Sistema</span>
             </h3>
@@ -140,9 +138,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </div>
 
           {errorMessage && (
-            <div className="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-start space-x-2.5 text-rose-300 text-xs animate-in fade-in">
+            <div className="mb-4 sm:mb-5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl sm:rounded-2xl flex items-start space-x-2.5 text-rose-300 text-xs animate-in fade-in">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
-              <div className="flex-1 font-medium">{errorMessage}</div>
+              <div className="flex-1 font-medium leading-relaxed">{errorMessage}</div>
             </div>
           )}
 
@@ -161,7 +159,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu.email@exemplo.com"
                   required
-                  className="block w-full pl-10 pr-3 py-2.5 bg-zinc-950 border border-zinc-700 rounded-xl text-zinc-100 placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-medium"
+                  className="block w-full pl-10 pr-3 py-3 bg-zinc-950 border border-zinc-700 rounded-xl text-zinc-100 placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-medium"
                 />
               </div>
             </div>
@@ -180,12 +178,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   onChange={(e) => setSenha(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="block w-full pl-10 pr-10 py-2.5 bg-zinc-950 border border-zinc-700 rounded-xl text-zinc-100 placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-mono"
+                  className="block w-full pl-10 pr-10 py-3 bg-zinc-950 border border-zinc-700 rounded-xl text-zinc-100 placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-mono"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300 cursor-pointer p-2"
+                  aria-label={showPassword ? "Ocultar senha" : "Ver senha"}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -193,7 +192,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </div>
 
             <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center space-x-2 cursor-pointer">
+              <label className="flex items-center space-x-2 cursor-pointer py-1">
                 <input
                   type="checkbox"
                   checked={rememberMe}
@@ -208,7 +207,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-zinc-950/50 transition-all active:scale-98 cursor-pointer disabled:opacity-50"
+                className="w-full min-h-[48px] flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-zinc-950/50 transition-all active:scale-98 cursor-pointer disabled:opacity-50"
               >
                 {isLoading ? (
                   <span className="text-sm">Autenticando...</span>
@@ -224,10 +223,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         </div>
 
         {/* Informações de Segurança */}
-        <div className="mt-6 text-center">
-          <p className="text-xs text-zinc-500 flex items-center justify-center space-x-1.5 font-medium">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Acesso criptografado e seguro com controle de níveis de permissão</span>
+        <div className="mt-5 sm:mt-6 text-center">
+          <p className="text-xs text-zinc-500 flex items-center justify-center space-x-1.5 font-medium px-2">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span>Acesso criptografado e seguro com controle de permissões</span>
           </p>
         </div>
       </div>

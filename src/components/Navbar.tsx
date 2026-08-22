@@ -328,6 +328,67 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </header>
 
+      {/* BARRA DE NAVEGAÇÃO INFERIOR PARA CELULAR (MOBILE BOTTOM BAR) */}
+      <nav 
+        id="mobile-bottom-nav" 
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg px-2 py-1.5 flex items-center justify-around no-print"
+        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+      >
+        <button
+          type="button"
+          onClick={() => handleSelectTab('dashboard')}
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[56px] ${
+            activeTab === 'dashboard' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <LayoutDashboard className={`w-5 h-5 ${activeTab === 'dashboard' ? 'text-emerald-600 scale-110' : ''} transition-transform`} />
+          <span className="text-[10px] mt-0.5">Início</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSelectTab('empreendimentos')}
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[56px] ${
+            activeTab === 'empreendimentos' || activeTab === 'map_explorer' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Globe className={`w-5 h-5 ${activeTab === 'empreendimentos' || activeTab === 'map_explorer' ? 'text-emerald-600 scale-110' : ''} transition-transform`} />
+          <span className="text-[10px] mt-0.5">Mapa</span>
+        </button>
+
+        {/* BOTÃO CENTRAL DE NOVA VENDA */}
+        <button
+          type="button"
+          onClick={onNewSale}
+          className="flex flex-col items-center justify-center -mt-5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white p-3 rounded-full shadow-lg shadow-emerald-600/40 border-2 border-white cursor-pointer transition-transform"
+          title="Nova Venda"
+        >
+          <PlusCircle className="w-6 h-6" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSelectTab('sales_list')}
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[56px] ${
+            activeTab === 'sales_list' || activeTab === 'sales_form' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <ListFilter className={`w-5 h-5 ${activeTab === 'sales_list' || activeTab === 'sales_form' ? 'text-emerald-600 scale-110' : ''} transition-transform`} />
+          <span className="text-[10px] mt-0.5">Vendas</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIsMenuOpen(true)}
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[56px] ${
+            isMenuOpen ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Menu className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Menu</span>
+        </button>
+      </nav>
+
       {/* DRAWER LATERAL DO MENU HAMBÚRGUER */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden no-print">
