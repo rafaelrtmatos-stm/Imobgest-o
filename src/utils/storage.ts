@@ -23,19 +23,19 @@ export function getStoredUsers(): AppUser[] {
     }
 
     // Garante que o administrador mestre (rafaelrtmatos@gmail.com) sempre existe e tem as credenciais corretas
-    const adminIndex = users.findIndex(u => u.email.toLowerCase() === 'rafaelrtmatos@gmail.com');
+    const adminIndex = users.findIndex(u => u.email.trim().toLowerCase() === 'rafaelrtmatos@gmail.com');
     if (adminIndex === -1) {
       const masterAdmin = INITIAL_USERS[0];
       users.unshift(masterAdmin);
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
     } else {
-      // Se a senha estiver vazia ou status inativo, recupera acesso do admin
-      if (!users[adminIndex].senha || users[adminIndex].status !== 'ativo') {
+      // Garante status ativo e papel de admin para o master
+      users[adminIndex].status = 'ativo';
+      users[adminIndex].role = 'admin';
+      if (!users[adminIndex].senha) {
         users[adminIndex].senha = 'Geper3tp@';
-        users[adminIndex].status = 'ativo';
-        users[adminIndex].role = 'admin';
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
       }
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
     }
 
     return users;

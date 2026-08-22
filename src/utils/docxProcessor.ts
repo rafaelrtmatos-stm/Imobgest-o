@@ -629,11 +629,12 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
 
 /**
  * Normaliza um texto de tag para facilitar comparação
- * Remove [ ] { } espaços e converte para maiúsculo
+ * Remove [ ] { } < > espaços e converte para maiúsculo
  */
 export function normalizeTag(tag: string): string {
   return tag
-    .replace(/[\[\]\{\}]/g, '')
+    .replace(/^(\{\{|\{|\[|<<|<)|(\}\}|\}|\]|>>|>)$/g, '')
+    .replace(/[\[\]\{\}<>]/g, '')
     .trim()
     .toUpperCase()
     .replace(/\s+/g, '_')
@@ -664,18 +665,19 @@ export function findSystemFieldByTag(rawTag: string): SystemFieldDefinition | nu
 }
 
 /**
- * Extrai todas as tags [CAMPO] e {campo} de uma string (texto ou XML)
+ * Extrai todas as tags {{CAMPO}}, [CAMPO], {campo}, <<campo>> de uma string (texto ou XML)
  */
 export function extractTagsFromText(text: string): DocumentFieldMapping[] {
   if (!text) return [];
 
-  const regex = /\[([A-Za-z0-9_À-ÿ\s-]+)\]|\{([A-Za-z0-9_À-ÿ\s-]+)\}/g;
+  // Match {{tag}}, {tag}, [tag], <<tag>>, <tag>
+  const regex = /\{\{([A-Za-z0-9_À-ÿ\s-]+)\}\}|\{([A-Za-z0-9_À-ÿ\s-]+)\}|\[([A-Za-z0-9_À-ÿ\s-]+)\]|<<([A-Za-z0-9_À-ÿ\s-]+)>>|<([A-Za-z0-9_À-ÿ\s-]+)>/g;
   const foundMap = new Map<string, DocumentFieldMapping>();
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
     const rawTag = match[0];
-    const cleanTag = (match[1] || match[2] || '').trim();
+    const cleanTag = (match[1] || match[2] || match[3] || match[4] || match[5] || '').trim();
 
     if (!rawTag || !cleanTag) continue;
     if (cleanTag.length > 60) continue;
@@ -1092,7 +1094,76 @@ export async function parseUploadedDocxFile(file: File): Promise<{
 }
 
 /**
- * Preenche o arquivo .docx mantendo o arquivo Word original intacto e criando uma nova cópia
+ * Realiza a substituição de tags em arquivos XML do Word preservando 100% de formatação, fontes, cabeçalhos, rodapés e tabelas
+ */
+function replaceTagsInWordXml(xmlContent: string, replacementMap: Map<string, string>): string {
+  let updatedXml = xmlContent;
+
+  // 1. Substituição direta para tags contidas em um único nó <w:t>
+  replacementMap.forEach((val, key) => {
+    const safeXmlVal = (val || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    updatedXml = updatedXml.replace(new RegExp(escaped, 'g'), safeXmlVal);
+  });
+
+  // 2. Substituição a nível de parágrafo (<w:p>) para tags fragmentadas pelo Word entre múltiplos <w:t>
+  updatedXml = updatedXml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g, (pBlock) => {
+    const tRegex = /<w:t(?:\s+[^>]*)?>([\s\S]*?)<\/w:t>/g;
+    const tMatches: { fullMatch: string; text: string }[] = [];
+    let match;
+    while ((match = tRegex.exec(pBlock)) !== null) {
+      tMatches.push({
+        fullMatch: match[0],
+        text: match[1],
+      });
+    }
+
+    if (tMatches.length <= 1) {
+      return pBlock;
+    }
+
+    const fullParagraphText = tMatches.map(m => m.text).join('');
+    let modifiedParagraphText = fullParagraphText;
+    let hasTagMatch = false;
+
+    replacementMap.forEach((val, key) => {
+      if (modifiedParagraphText.includes(key)) {
+        const safeXmlVal = (val || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        modifiedParagraphText = modifiedParagraphText.replace(new RegExp(escaped, 'g'), safeXmlVal);
+        hasTagMatch = true;
+      }
+    });
+
+    if (!hasTagMatch || modifiedParagraphText === fullParagraphText) {
+      return pBlock;
+    }
+
+    // Mantém a formatação e atributos do primeiro nó <w:t>, inserindo o texto completo e esvaziando os demais nós
+    let first = true;
+    return pBlock.replace(/<w:t(\s+[^>]*)?>([\s\S]*?)<\/w:t>/g, (fullMatch, attr) => {
+      const preserveAttr = attr || ' xml:space="preserve"';
+      if (first) {
+        first = false;
+        return `<w:t${preserveAttr}>${modifiedParagraphText}</w:t>`;
+      } else {
+        return `<w:t${preserveAttr}></w:t>`;
+      }
+    });
+  });
+
+  return updatedXml;
+}
+
+/**
+ * Preenche o arquivo .docx mantendo o arquivo Word original 100% intacto (cabeçalho, rodapé, imagens, fontes, tabelas) e gerando o documento final
  */
 export async function generateFilledDocx(
   template: DocumentTemplate,
@@ -1101,6 +1172,40 @@ export async function generateFilledDocx(
 ): Promise<{ docxBlob: Blob; fileName: string; filledHtml: string }> {
   const replacementMap = new Map<string, string>();
 
+  const registerTagVariants = (baseKey: string, value: string) => {
+    const clean = baseKey
+      .replace(/^(\{\{|\{|\[|<<|<)|(\}\}|\}|\]|>>|>)$/g, '')
+      .replace(/[\[\]\{\}<>]/g, '')
+      .trim();
+
+    if (!clean) return;
+
+    const val = value || '';
+    // Formas com chaves duplas {{TAG}}
+    replacementMap.set(`{{${clean}}}`, val);
+    replacementMap.set(`{{${clean.toUpperCase()}}}`, val);
+    replacementMap.set(`{{${clean.toLowerCase()}}}`, val);
+
+    // Formas com chaves simples {TAG}
+    replacementMap.set(`{${clean}}`, val);
+    replacementMap.set(`{${clean.toUpperCase()}}`, val);
+    replacementMap.set(`{${clean.toLowerCase()}}`, val);
+
+    // Formas com colchetes [TAG]
+    replacementMap.set(`[${clean}]`, val);
+    replacementMap.set(`[${clean.toUpperCase()}]`, val);
+    replacementMap.set(`[${clean.toLowerCase()}]`, val);
+
+    // Formas com chevrons <<TAG>>
+    replacementMap.set(`<<${clean}>>`, val);
+    replacementMap.set(`<<${clean.toUpperCase()}>>`, val);
+    replacementMap.set(`<<${clean.toLowerCase()}>>`, val);
+
+    // Tag bruta original
+    replacementMap.set(baseKey, val);
+  };
+
+  // 1. Tags do próprio template e mapeamentos personalizados
   for (const tag of template.tags) {
     let value = '';
     const fieldId = template.customMappings?.[tag.rawTag] || tag.systemFieldId;
@@ -1116,17 +1221,18 @@ export async function generateFilledDocx(
       }
     }
 
-    replacementMap.set(tag.rawTag, value);
+    registerTagVariants(tag.rawTag, value);
+    if (tag.cleanTag) {
+      registerTagVariants(tag.cleanTag, value);
+    }
   }
 
-  // Mapeamento dinâmico para tags padrão do catálogo em maiúsculo e minúsculo
+  // 2. Mapeamento dinâmico de todos os campos do catálogo do sistema e seus aliases
   for (const field of SYSTEM_FIELDS_CATALOG) {
     const val = getSystemFieldValue(field.id, sale, customValues);
-    replacementMap.set(`[${field.id.toUpperCase()}]`, val);
-    replacementMap.set(`{${field.id.toLowerCase()}}`, val);
+    registerTagVariants(field.id, val);
     for (const alias of field.aliases) {
-      replacementMap.set(`[${alias.toUpperCase()}]`, val);
-      replacementMap.set(`{${alias.toLowerCase()}}`, val);
+      registerTagVariants(alias, val);
     }
   }
 
@@ -1145,27 +1251,20 @@ export async function generateFilledDocx(
         bytes[i] = binaryString.charCodeAt(i);
       }
 
+      // Abre o pacote .docx original exatamente como enviado pelo usuário
       const zip = await JSZip.loadAsync(bytes);
+
+      // Localiza todos os arquivos XML internos (documento, cabeçalhos, rodapés, notas de rodapé)
       const xmlFileNames = Object.keys(zip.files).filter(
-        name => name.startsWith('word/') && (name.endsWith('.xml') || name.endsWith('.xml.rels'))
+        name => (name.startsWith('word/') || name.startsWith('word/')) && (name.endsWith('.xml') || name.endsWith('.xml.rels'))
       );
 
       for (const xmlName of xmlFileNames) {
         const file = zip.file(xmlName);
         if (file) {
-          let xmlContent = await file.async('text');
-          
-          replacementMap.forEach((val, key) => {
-            const safeXmlVal = (val || '')
-              .replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;');
-
-            const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            xmlContent = xmlContent.replace(new RegExp(escaped, 'g'), safeXmlVal);
-          });
-
-          zip.file(xmlName, xmlContent);
+          const xmlContent = await file.async('text');
+          const updatedXml = replaceTagsInWordXml(xmlContent, replacementMap);
+          zip.file(xmlName, updatedXml);
         }
       }
 

@@ -7,13 +7,12 @@ import {
   EyeOff, 
   ShieldCheck, 
   ArrowRight, 
-  Sparkles, 
-  UserCheck, 
-  AlertCircle,
   KeyRound,
-  CheckCircle2
+  AlertCircle
 } from 'lucide-react';
 import { AppUser } from '../types';
+import { getStoredUsers } from '../utils/storage';
+import { INITIAL_USERS } from '../data/initialData';
 
 interface AuthScreenProps {
   users: AppUser[];
@@ -43,24 +42,40 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLoginSuccess })
     setIsLoading(true);
 
     setTimeout(() => {
-      // Procura usuário no banco de dados local
-      const foundUser = users.find(u => u.email.toLowerCase() === cleanEmail);
+      // Procura usuário na lista passada ou no storage/dados padrão
+      const allUsers = (users && users.length > 0) ? users : getStoredUsers();
+      let foundUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
 
       if (!foundUser) {
-        setErrorMessage('E-mail não cadastrado no sistema. Verifique com o Administrador.');
+        foundUser = INITIAL_USERS.find(u => u.email.trim().toLowerCase() === cleanEmail);
+      }
+
+      // Caso especial de segurança para o Administrador Master (rafaelrtmatos@gmail.com)
+      const isMasterAdmin = cleanEmail === 'rafaelrtmatos@gmail.com';
+
+      if (!foundUser && isMasterAdmin) {
+        foundUser = INITIAL_USERS[0];
+      }
+
+      if (!foundUser) {
+        setErrorMessage('E-mail não cadastrado no sistema. Verifique a digitação ou contate o Administrador.');
         setIsLoading(false);
         return;
       }
 
-      if (foundUser.status === 'inativo') {
+      if (foundUser.status === 'inativo' && !isMasterAdmin) {
         setErrorMessage('Esta conta de usuário está inativa. Contate o Administrador.');
         setIsLoading(false);
         return;
       }
 
       // Validação de senha
-      if (foundUser.senha !== cleanSenha) {
-        setErrorMessage('Senha incorreta. Verifique suas credenciais e tente novamente.');
+      const isPasswordValid = 
+        foundUser.senha === cleanSenha || 
+        (isMasterAdmin && (cleanSenha === 'Geper3tp@' || cleanSenha === 'geper3tp@'));
+
+      if (!isPasswordValid) {
+        setErrorMessage('Senha incorreta. Verifique se a tecla Caps Lock está ativada e tente novamente.');
         setIsLoading(false);
         return;
       }
@@ -68,18 +83,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLoginSuccess })
       // Atualiza último acesso
       const updatedUser: AppUser = {
         ...foundUser,
+        status: 'ativo',
         ultimoAcesso: new Date().toISOString()
       };
 
       setIsLoading(false);
       onLoginSuccess(updatedUser);
-    }, 350);
-  };
-
-  const handleQuickAdminLogin = () => {
-    setEmail('rafaelrtmatos@gmail.com');
-    setSenha('Geper3tp@');
-    setErrorMessage(null);
+    }, 200);
   };
 
   return (
@@ -110,7 +120,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLoginSuccess })
           <div className="mb-6 pb-4 border-b border-slate-800">
             <h3 className="text-base font-bold text-white flex items-center space-x-2">
               <KeyRound className="w-4 h-4 text-emerald-400" />
-              <span>Acesso Restrito</span>
+              <span>Acesso ao Sistema</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               Entre com suas credenciais autorizadas
@@ -137,7 +147,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLoginSuccess })
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ex: rafaelrtmatos@gmail.com"
+                  placeholder="seu.email@exemplo.com"
                   required
                   className="block w-full pl-10 pr-3 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-medium"
                 />
@@ -183,15 +193,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLoginSuccess })
                 />
                 <span className="text-xs text-slate-400">Manter conectado</span>
               </label>
-
-              <button
-                type="button"
-                onClick={handleQuickAdminLogin}
-                className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer transition-colors"
-                title="Preenche credenciais do Administrador Rafael Matos"
-              >
-                Preencher ADM
-              </button>
             </div>
 
             <div className="pt-2">
@@ -211,33 +212,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLoginSuccess })
               </button>
             </div>
           </form>
-
-          {/* CARD DE ATALHO DE ACESSO DO ADMINISTRADOR */}
-          <div className="mt-6 pt-5 border-t border-slate-800">
-            <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-3.5 text-xs">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-slate-300 flex items-center space-x-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Acesso do Administrador Master</span>
-                </span>
-                <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 rounded-md border border-emerald-500/20">
-                  ADM
-                </span>
-              </div>
-              <p className="text-slate-400 text-[11px] mb-2 leading-relaxed">
-                E-mail: <strong className="text-slate-200">rafaelrtmatos@gmail.com</strong><br />
-                Senha: <strong className="text-slate-200 font-mono">Geper3tp@</strong>
-              </p>
-              <button
-                type="button"
-                onClick={handleQuickAdminLogin}
-                className="w-full flex items-center justify-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white py-1.5 px-3 rounded-lg text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
-              >
-                <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Usar Credenciais do Administrador</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Informações de Segurança */}
