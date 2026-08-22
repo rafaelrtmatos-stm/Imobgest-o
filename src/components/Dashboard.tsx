@@ -111,28 +111,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex items-center space-x-2">
             <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-mono font-bold px-2.5 py-0.5 rounded-md flex items-center">
               <Sparkles className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-              VISÃO GERAL IMOBILIÁRIA
+              SISTEMA DE CONTRATOS & VENDAS
             </span>
             <span className="text-xs text-slate-500 font-mono">
-              Atualizado em tempo real
+              Integrado com Nuvem Supabase
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-slate-900 tracking-tight">
-            Dashboard Executivo
+            Painel Executivo de Contratos & Vendas
           </h1>
           <p className="text-xs sm:text-sm text-slate-600">
-            Acompanhe as métricas de vendas, status de lotes, contratos emitidos e comissões.
+            Relatórios analíticos das vendas geradas pelos contratos, controle de parcelas, clientes e minutas Word.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => onNavigate('empreendimentos')}
+            onClick={() => onNavigate('word_templates')}
             className="flex items-center space-x-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-bold rounded-xl border border-slate-300 shadow-xs transition-all cursor-pointer"
           >
-            <MapPin className="w-4 h-4 text-emerald-600" />
-            <span>Mapa & Lotes</span>
+            <FileText className="w-4 h-4 text-emerald-600" />
+            <span>Gerador de Contratos</span>
           </button>
 
           <button
@@ -141,7 +141,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all cursor-pointer active:scale-95 border border-emerald-500"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>Nova Venda</span>
+            <span>Novo Contrato de Venda</span>
           </button>
         </div>
       </div>

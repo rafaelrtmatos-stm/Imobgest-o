@@ -108,12 +108,17 @@ export interface PropertyData {
   areaM2: number;
   tipoImovel?: string; // ex: Terreno Urbano, Lote Residencial
   localizacaoImovel?: string; // ex: Rua das Acácias, Lote 12, Quadra 05
+  endereco?: string; // Endereço ou rua específica
   documentoPropriedade?: string; // ex: Escritura Pública / Matrícula Geral
   outrosDadosImovel?: string;
   frenteMetros?: number;
   fundoMetros?: number;
   ladoDireitoMetros?: number;
   ladoEsquerdoMetros?: number;
+  lateralDireita?: number;
+  lateralEsquerda?: number;
+  localidade?: string;
+  ruaLote?: string;
   confrontacoes?: {
     frente?: string;
     fundo?: string;
@@ -121,6 +126,7 @@ export interface PropertyData {
     esquerda?: string;
   };
   matricula?: string;
+  inscricaoMunicipal?: string;
   registroCartorio?: string;
   cidade: string;
   uf: string;
@@ -281,6 +287,7 @@ export interface CompanyConfig {
   telefone: string;
   email: string;
   endereco: string;
+  cep?: string;
   cidade: string;
   estado: string;
   creci: string;

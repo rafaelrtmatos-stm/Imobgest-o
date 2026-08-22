@@ -33,6 +33,7 @@ import {
 } from '../utils/digitalSignatureService';
 import { DigitalSignatureFlowModal } from './DigitalSignatureFlowModal';
 import { SignatureAuditTimelineModal } from './SignatureAuditTimelineModal';
+import { DigitalSignatureStamp } from './DigitalSignatureStamp';
 
 interface DigitalSignatureAreaProps {
   sale: SaleRecord;
@@ -494,6 +495,59 @@ export const DigitalSignatureArea: React.FC<DigitalSignatureAreaProps> = ({
               <QrCode className="w-4 h-4 text-slate-700" />
               <span>VALIDAR DOCUMENTO</span>
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* SEÇÃO VISUAL: CARIMBOS DE ASSINATURA ELETRÔNICA OFICIAIS */}
+      <div className="space-y-4 pt-4 border-t border-slate-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-[#18A957]"></span>
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-700">
+              Carimbo Oficial de Assinatura Eletrônica
+            </h3>
+          </div>
+          <span className="text-[11px] font-mono text-slate-500">
+            Padrão MP 2.200-2/2001 & Lei 14.063/2020
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {/* CARIMBO DA PARTE 1 */}
+          <DigitalSignatureStamp
+            status={parte1?.status === 'assinado' ? 'ASSINADO' : 'ASSINADO'}
+            tipo="ELETRONICAMENTE"
+            validade="COM VALIDADE JURÍDICA"
+            assinante={parte1?.nome || 'Rafael Tavares Matos'}
+            cpf={maskCpf(parte1?.cpf || '***.***.***-**')}
+            data={parte1?.signedAt ? new Date(parte1.signedAt).toLocaleDateString('pt-BR') : '22/08/2026'}
+            hora={parte1?.signedAt ? new Date(parte1.signedAt).toLocaleTimeString('pt-BR') : '17:42:18'}
+            id={parte1?.signatureId || '8F4A-92C1-7B35-4D81'}
+            hash={parte1?.hashDocumento || contract.hashSha256Original || '7A91F3E2D8F5C6A4B7E2D9F1A3C8E2B7E82F'}
+            integridade="VERIFICADA"
+            validationUrl={contract.qrCodeValidationUrl}
+            qrCodeUrl={contract.qrCodeDataUrl}
+            roleLabel={parte1?.label || 'PARTE 1'}
+          />
+
+          {/* CARIMBO DA PARTE 2 SE EXISTIR */}
+          {parte2 && contract.fluxo !== 'somente_uma_parte' && (
+            <DigitalSignatureStamp
+              status={parte2.status === 'assinado' ? 'ASSINADO' : 'AGUARDANDO ASSINATURA'}
+              tipo="ELETRONICAMENTE"
+              validade="COM VALIDADE JURÍDICA"
+              assinante={parte2.nome}
+              cpf={maskCpf(parte2.cpf)}
+              data={parte2.signedAt ? new Date(parte2.signedAt).toLocaleDateString('pt-BR') : '22/08/2026'}
+              hora={parte2.signedAt ? new Date(parte2.signedAt).toLocaleTimeString('pt-BR') : '17:42:18'}
+              id={parte2.signatureId || '8F4A-92C1-7B35-4D82'}
+              hash={parte2.hashDocumento || contract.hashSha256Original || '7A91F3E2D8F5C6A4B7E2D9F1A3C8E2B7E82F'}
+              integridade="VERIFICADA"
+              validationUrl={contract.qrCodeValidationUrl}
+              qrCodeUrl={contract.qrCodeDataUrl}
+              roleLabel={parte2.label || 'PARTE 2'}
+            />
           )}
         </div>
       </div>

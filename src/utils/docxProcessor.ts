@@ -356,6 +356,14 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     exampleValue: 'R-04/182.490',
   },
   {
+    id: 'inscricao_prefeitura',
+    label: 'Inscrição Municipal / Prefeitura',
+    category: 'Imóvel/Lote',
+    description: 'Número do cadastro imobiliário ou inscrição na prefeitura',
+    aliases: ['INSCRICAO_PREFEITURA', 'INSCRICAO_MUNICIPAL', 'CADASTRO_PREFEITURA', 'INSC_MUNICIPAL'],
+    exampleValue: '01.04.120.0380.001',
+  },
+  {
     id: 'cartorio',
     label: 'Cartório de Registro',
     category: 'Imóvel/Lote',
@@ -507,17 +515,25 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     id: 'cidade_assinatura',
     label: 'Cidade da Assinatura',
     category: 'Datas e Geral',
-    description: 'Cidade configurada onde o contrato é assinado',
-    aliases: ['CIDADE_ASSINATURA', 'CIDADE_LOCAL'],
+    description: 'Cidade configurada onde o contrato é assinado ou onde o imóvel se localiza',
+    aliases: ['CIDADE_ASSINATURA', 'CIDADE_LOCAL', 'CIDADE_CONTRATO', 'MUNICIPIO_CONTRATO', 'MUNICIPIO_ASSINATURA', 'LOCAL_ASSINATURA'],
     exampleValue: 'Santarém',
   },
   {
     id: 'estado_assinatura',
     label: 'Estado da Assinatura',
     category: 'Datas e Geral',
-    description: 'Sigla do estado configurado onde o contrato é assinado',
-    aliases: ['ESTADO_ASSINATURA', 'UF_ASSINATURA'],
+    description: 'Sigla do estado onde o contrato é assinado',
+    aliases: ['ESTADO_ASSINATURA', 'UF_ASSINATURA', 'UF_CONTRATO', 'ESTADO_CONTRATO'],
     exampleValue: 'PA',
+  },
+  {
+    id: 'foro_comarca',
+    label: 'Foro / Comarca Eleita',
+    category: 'Datas e Geral',
+    description: 'Comarca/Cidade e UF eleita para o foro do contrato',
+    aliases: ['FORO_COMARCA', 'COMARCA', 'FORO', 'CIDADE_FORO', 'COMARCA_FORO', 'FORO_CIDADE', 'FORO_ELEITO'],
+    exampleValue: 'Comarca de Santarém/PA',
   },
   {
     id: 'dia_assinatura',
@@ -624,6 +640,96 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     description: 'CPF da segunda testemunha',
     aliases: ['TESTEMUNHA2_CPF', 'TESTEMUNHA_2_CPF', 'CPF_TESTEMUNHA2'],
     exampleValue: '678.901.234-55',
+  },
+
+  // TAGS DINÂMICAS DE CONTRATO E GÊNERO GRAMATICAL
+  {
+    id: 'quantidade_terreno',
+    label: 'Quantidade de Terreno(s)',
+    category: 'Imóvel/Lote',
+    description: 'Quantidade de terrenos descritos no contrato',
+    aliases: ['QUANTIDADE_TERRENO', 'QUANTTERRENO', 'QTD_TERRENO', 'QUANTIDADE_IMOVEL'],
+    exampleValue: '01 (um)',
+  },
+  {
+    id: 'localidade',
+    label: 'Localidade / Região',
+    category: 'Imóvel/Lote',
+    description: 'Localidade geográfica do empreendimento',
+    aliases: ['LOCALIDADE', 'LOCAL_EMPREENDIMENTO', 'LOCAL_IMOVEL'],
+    exampleValue: 'Rodovia Fernando Guilhon',
+  },
+  {
+    id: 'rua_do_lote',
+    label: 'Rua do Lote',
+    category: 'Imóvel/Lote',
+    description: 'Logradouro onde o lote está situado',
+    aliases: ['RUA_DO_LOTE', 'RUA_LOTE', 'LOGRADOURO_LOTE', 'RUA'],
+    exampleValue: 'Rua Projetada A',
+  },
+  {
+    id: 'lateral_direita',
+    label: 'Metros Lateral Direita',
+    category: 'Imóvel/Lote',
+    description: 'Medida lateral direita do terreno',
+    aliases: ['LATERAL_DIREITA', 'MEDIDA_DIREITA', 'LADO_DIREITO'],
+    exampleValue: '30,00',
+  },
+  {
+    id: 'lateral_esquerda',
+    label: 'Metros Lateral Esquerda',
+    category: 'Imóvel/Lote',
+    description: 'Medida lateral esquerda do terreno',
+    aliases: ['LATERAL_ESQUERDA', 'MEDIDA_ESQUERDA', 'LADO_ESQUERDO'],
+    exampleValue: '30,00',
+  },
+  {
+    id: 'generov',
+    label: 'Gênero Gramatical do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Artigo / gênero de concordância do vendedor (o/a)',
+    aliases: ['GENEROV', 'GENEROV2', 'GENEROV3', 'GENEROV4', 'CONCORDANCIA_VENDEDOR', 'ARTIGO_VENDEDOR'],
+    exampleValue: 'o',
+  },
+  {
+    id: 'generoc',
+    label: 'Gênero Gramatical do Comprador',
+    category: 'Comprador',
+    description: 'Artigo / gênero de concordância do comprador (o/a)',
+    aliases: ['GENEROC', 'GENEROC2', 'GENEROC3', 'CONCORDANCIA_COMPRADOR', 'ARTIGO_COMPRADOR'],
+    exampleValue: 'o',
+  },
+  {
+    id: 'portador_vendedor',
+    label: 'Portador(a) / Documento',
+    category: 'Vendedor/Corretor',
+    description: 'Termo portador(a) para vendedor e comprador',
+    aliases: ['PORT', 'PORTADOR', 'PORTADORA', 'PORTADOR_VENDEDOR', 'PORTADOR_COMPRADOR'],
+    exampleValue: 'portador(a)',
+  },
+  {
+    id: 'preposicao_comprador',
+    label: 'Preposição do Comprador',
+    category: 'Comprador',
+    description: 'Preposição com artigo (ao/à)',
+    aliases: ['PREPOSICAO_COMPRADOR', 'AO_COMPRADOR'],
+    exampleValue: 'ao',
+  },
+  {
+    id: 'vendedor_termo',
+    label: 'Termo Contratual do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Título jurídico (ex: PROMITENTE VENDEDOR)',
+    aliases: ['VENDEDOR_TERMO', 'TERMO_VENDEDOR'],
+    exampleValue: 'PROMITENTE VENDEDOR',
+  },
+  {
+    id: 'comprador_termo',
+    label: 'Termo Contratual do Comprador',
+    category: 'Comprador',
+    description: 'Título jurídico (ex: PROMITENTE COMPRADOR)',
+    aliases: ['COMPRADOR_TERMO', 'TERMO_COMPRADOR'],
+    exampleValue: 'PROMITENTE COMPRADOR',
   },
 ];
 
@@ -897,6 +1003,29 @@ export function getSystemFieldValue(
       return sale.buyer.regimeBens || 'Comunhão Parcial de Bens';
 
     // IMÓVEL / LOTE
+    case 'quantidade_terreno':
+    case 'quantterreno':
+      return '01 (um)';
+    case 'localidade':
+      return sale.property.localidade || sale.property.localizacaoImovel || `Rodovia Fernando Guilhon / ${sale.property.cidade || 'Santarém'}-${sale.property.uf || 'PA'}`;
+    case 'rua_do_lote':
+    case 'rua_lote':
+      return sale.property.ruaLote || 'Rua Projetada A';
+    case 'frente':
+    case 'medida_frente':
+      return sale.property.frenteMetros ? `${sale.property.frenteMetros.toLocaleString('pt-BR')}` : '12,00';
+    case 'fundos':
+    case 'fundo':
+    case 'medida_fundo':
+      return sale.property.fundoMetros ? `${sale.property.fundoMetros.toLocaleString('pt-BR')}` : '30,00';
+    case 'lateral_direita':
+    case 'medida_direita':
+      return sale.property.lateralDireita ? `${sale.property.lateralDireita.toLocaleString('pt-BR')}` : (sale.property.fundoMetros ? `${sale.property.fundoMetros.toLocaleString('pt-BR')}` : '30,00');
+    case 'lateral_esquerda':
+    case 'medida_esquerda':
+      return sale.property.lateralEsquerda ? `${sale.property.lateralEsquerda.toLocaleString('pt-BR')}` : (sale.property.fundoMetros ? `${sale.property.fundoMetros.toLocaleString('pt-BR')}` : '30,00');
+    case 'area_total':
+      return sale.property.areaM2 ? `${sale.property.areaM2.toLocaleString('pt-BR')}` : '360,00';
     case 'empreendimento':
       return sale.property.empreendimento || '';
     case 'lote':
@@ -923,6 +1052,9 @@ export function getSystemFieldValue(
       return sale.property.uf || companyConfig.estado || '';
     case 'matricula':
       return sale.property.matricula || 'R-04/182.490';
+    case 'inscricao_prefeitura':
+    case 'inscricao_municipal':
+      return sale.property.inscricaoMunicipal || '01.04.120.0380.001';
     case 'cartorio':
       return sale.property.registroCartorio || '1º Ofício de Registro de Imóveis';
 
@@ -991,14 +1123,36 @@ export function getSystemFieldValue(
 
     // DATAS E LOCAL
     case 'cidade_assinatura':
+    case 'cidade_contrato':
+    case 'municipio_contrato':
+    case 'municipio_assinatura':
+    case 'local_assinatura':
       return companyConfig.cidadeAssinatura || companyConfig.cidade || sale.property.cidade || 'Santarém';
     case 'estado_assinatura':
+    case 'uf_assinatura':
+    case 'uf_contrato':
+    case 'estado_contrato':
       return companyConfig.estadoAssinatura || companyConfig.estado || sale.property.uf || 'PA';
+    case 'foro_comarca':
+    case 'comarca':
+    case 'foro':
+    case 'cidade_foro':
+    case 'comarca_foro':
+    case 'foro_cidade':
+    case 'foro_eleito': {
+      const city = companyConfig.cidadeAssinatura || companyConfig.cidade || sale.property.cidade || 'Santarém';
+      const uf = companyConfig.estadoAssinatura || companyConfig.estado || sale.property.uf || 'PA';
+      return `Comarca de ${city}/${uf}`;
+    }
     case 'dia_assinatura':
+    case 'dia':
       return getDiaAssinatura(contractDate);
     case 'mes_assinatura_extenso':
+    case 'mes_extenso':
+    case 'mes':
       return getMesAssinaturaExtenso(contractDate);
     case 'ano_assinatura':
+    case 'ano':
       return getAnoAssinatura(contractDate);
     case 'data_contrato':
       return formatDateBR(contractDate);

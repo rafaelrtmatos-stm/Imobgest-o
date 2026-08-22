@@ -76,7 +76,7 @@ export function getContractVariables(sale: SaleRecord) {
   const estadoCivilComprador = buyer.estadoCivil || 'solteiro(a)';
   const portadorComprador = 'portador(a)';
   const rgComprador = buyer.rg || '0000000';
-  const emissaoRgComprador = 'SSP/PA';
+  const emissaoRgComprador = 'SSP/' + (buyer.uf || property.uf || 'PA');
   const cpfComprador = buyer.cpf || '000.000.000-00';
   const telefoneComprador = buyer.contato1 || buyer.contato2 || '(93) 99999-9999';
   const telefoneVendedor = seller.vendedorTelefone || company.telefone || '(93) 3522-8800';
@@ -85,22 +85,25 @@ export function getContractVariables(sale: SaleRecord) {
   const numeroComprador = buyer.numero || 'S/N';
   const bairroComprador = buyer.bairro || 'Centro';
   const cepComprador = buyer.cep || '68000-000';
-  const cepVendedor = '68005-100';
+  const cepVendedor = company.cep || '68005-100';
   const cidadeComprador = buyer.cidade || property.cidade || 'Santarém';
   const estadoComprador = buyer.uf || property.uf || 'PA';
   const compradorTermo = isBuyerFemale ? 'PROMITENTE COMPRADORA' : 'PROMITENTE COMPRADOR';
 
   const quantidadeTerreno = '01 (um)';
-  const localidade = property.localizacaoImovel || 'Área de Expansão Urbana / Curuá-Una';
+  const localidade = property.localizacaoImovel || property.endereco || 'Área de Expansão Urbana';
   const empreendimento = property.empreendimento || 'Loteamento Residencial';
   const lote = property.lote || '01';
   const quadra = property.quadra || '01';
-  const ruaDoLote = property.localizacaoImovel?.includes('Rua') ? property.localizacaoImovel : 'Rua Projetada';
+  const ruaDoLote = property.localizacaoImovel?.includes('Rua') ? property.localizacaoImovel : (property.endereco ? `situado na ${property.endereco}` : 'Rua Projetada');
   const frente = (property.frenteMetros || 10).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
   const lateralDireita = (property.ladoDireitoMetros || property.fundoMetros || 30).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
   const lateralEsquerda = (property.ladoEsquerdoMetros || property.fundoMetros || 30).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
   const fundos = (property.fundoMetros || 10).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
   const areaTotal = (property.areaM2 || 300).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  const cidadeImovel = property.cidade || company.cidade || 'Santarém';
+  const estadoImovel = property.uf || company.estado || 'PA';
+  const foroComarca = company.cidadeAssinatura ? `Comarca de ${company.cidadeAssinatura}/${company.estadoAssinatura || estadoImovel}` : `Comarca de ${cidadeImovel}/${estadoImovel}`;
 
   const valorTotalNum = financial.valorTotal || 0;
   const entradaNum = financial.entrada || 0;
@@ -180,6 +183,9 @@ export function getContractVariables(sale: SaleRecord) {
     lateralEsquerda,
     fundos,
     areaTotal,
+    cidadeImovel,
+    estadoImovel,
+    foroComarca,
     valorTotal,
     valorTotalExtenso,
     entrada,
@@ -262,7 +268,7 @@ function generateAVistaContractHTML(sale: SaleRecord): string {
           1º - DO OBJETO
         </h3>
         <p class="indent-8 text-justify">
-          A posse que exerce sobre <strong>${v.quantidadeTerreno}</strong> terreno rural, extraído de uma área localizada na <strong>${v.localidade}</strong>, no desmembramento do lote do Empreendimento <strong>${v.empreendimento}</strong>, no município de Santarém/PA, de forma regular. Denominado <strong>Lote ${v.lote}</strong> da <strong>Quadra ${v.quadra}</strong>, ${v.ruaDoLote}, medindo <strong>${v.frente}</strong> metros de frente, lateral direita medindo <strong>${v.lateralDireita}</strong> metros, lateral esquerda medindo <strong>${v.lateralEsquerda}</strong> metros e medindo <strong>${v.fundos}</strong> metros de fundos, com área total de <strong>${v.areaTotal}</strong> metros quadrados.
+          A posse que exerce sobre <strong>${v.quantidadeTerreno}</strong> terreno, extraído de uma área localizada na <strong>${v.localidade}</strong>, no desmembramento do lote do Empreendimento <strong>${v.empreendimento}</strong>, no município de ${v.cidadeImovel}/${v.estadoImovel}, de forma regular. Denominado <strong>Lote ${v.lote}</strong> da <strong>Quadra ${v.quadra}</strong>, ${v.ruaDoLote}, medindo <strong>${v.frente}</strong> metros de frente, lateral direita medindo <strong>${v.lateralDireita}</strong> metros, lateral esquerda medindo <strong>${v.lateralEsquerda}</strong> metros e medindo <strong>${v.fundos}</strong> metros de fundos, com área total de <strong>${v.areaTotal}</strong> metros quadrados.
         </p>
         <p class="indent-8 text-justify">
           <strong>§ Parágrafo único</strong> - Pelo presente instrumento e na melhor forma de direito, ${v.generoV} <strong>${v.vendedorTermo}</strong>, tem ajustado vender conforme promete ${v.preposicaoComprador} <strong>${v.compradorTermo}</strong>, e este a comprar-lhe o imóvel descrito e caracterizado na cláusula anterior, de forma livre e desembaraçado de quaisquer ônus (real, pessoal, fiscal ou extrajudicial), dívidas, arrestos ou sequestros, ou ainda de restrições de qualquer natureza, pelo preço e de conformidade com as cláusulas e condições adiante estabelecidas.
@@ -280,16 +286,16 @@ function generateAVistaContractHTML(sale: SaleRecord): string {
           A posse do imóvel, objeto deste contrato, é transmitida pel${v.generoV} <strong>${v.vendedorTermo}</strong> ${v.preposicaoComprador} <strong>${v.compradorTermo}</strong> após a assinatura deste contrato.
         </p>
         <p class="indent-8 text-justify">
-          <strong>§1º</strong> - A partir da posse do imóvel, correrão por conta exclusivas d${v.generoC} <strong>${v.compradorTermo}</strong> todos os impostos, taxas ou contribuições fiscais de qualquer natureza incidentes sobre o imóvel, ainda que lançados em nome d${v.generoV} <strong>${v.vendedorTermo}</strong> ou de terceiros, assim como serão, desde já, de sua inteira responsabilidade, as despesas com o registro deste contrato e outras decorrentes desta transação. É de inteira responsabilidade d${v.generoC} <strong>${v.compradorTermo}</strong>, questões, que envolvam a não observância da legislação ambientais e florestais brasileira.
+          <strong>§1º</strong> - A partir da posse do imóvel, correrão por conta exclusivas d${v.generoC} <strong>${v.compradorTermo}</strong> todos os impostos, taxas ou contribuições fiscais de qualquer natureza incidentes sobre o imóvel, ainda que lançados em nome d${v.generoV} <strong>${v.vendedorTermo}</strong> ou de terceiros, assim como serão, desde já, de sua inteira responsabilidade, as despesas com o registro deste contrato e outras decorrentes desta transação. É de inteira responsabilidade d${v.generoC} <strong>${v.compradorTermo}</strong>, questões que envolvam a não observância da legislação ambiental e florestal brasileira.
         </p>
         <p class="indent-8 text-justify font-serif">
-          E como de fato efetivamente vendido está o lote de terra acima caracterizado, livre e desembaraçado de quaisquer ônus, embargo judicial, ou extrajudicial, pelo preço e quantia certa de <strong>R$ ${v.valorTotal}</strong> (${v.valorTotalExtenso}), que ${v.concordanciaComprador} <strong>${v.compradorTermo}</strong> pagou e ${v.concordanciaComprador} <strong>${v.vendedorTermo}</strong> recebeu em moeda legal corrente do país, importância essa, que dá ao COMPRADOR pleno, geral e irrevogável quitação, cedendo e transferindo o mesmo, todo o domínio e direito de ação, servidões ativas e passivas, senhorio de posse, que até então mantinha mansa e pacificamente sobre o dito terreno, havendo-se ${v.concordanciaComprador} <strong>${v.compradorTermo}</strong> por bem deste recibo e da cláusula “constitui”, dele se empossado, obrigando-se ainda ${v.generoV2} <strong>${v.vendedorTermo}</strong>, por si seus sucessores e herdeiros a assinar a qualquer tempo os documentos necessários à completa transferência do imóvel ora vendido e a fazer essa venda sempre boa, firme e valiosa todo tempo, pondo ${v.concordanciaComprador} <strong>${v.compradorTermo}</strong> a salvo de cobranças e contestações futuras, e a responder à evicção de direitos.
+          E como de fato efetivamente vendido está o lote de terra acima caracterizado, livre e desembaraçado de quaisquer ônus, embargo judicial ou extrajudicial, pelo preço e quantia certa de <strong>R$ ${v.valorTotal}</strong> (${v.valorTotalExtenso}), que ${v.artigoComprador} <strong>${v.compradorTermo}</strong> pagou e ${v.artigoVendedor} <strong>${v.vendedorTermo}</strong> recebeu em moeda legal corrente do país, importância essa que dá ao COMPRADOR plena, geral e irrevogável quitação, cedendo e transferindo ao mesmo todo o domínio e direito de ação, servidões ativas e passivas, senhorio de posse que até então mantinha mansa e pacificamente sobre o dito terreno, havendo-se ${v.artigoComprador} <strong>${v.compradorTermo}</strong> por bem deste recibo e da cláusula “constituti”, dele se empossando, obrigando-se ainda ${v.generoV2} <strong>${v.vendedorTermo}</strong>, por si, seus herdeiros e sucessores a assinar a qualquer tempo os documentos necessários à completa transferência do imóvel ora vendido e a fazer essa venda sempre boa, firme e valiosa a todo tempo, pondo ${v.artigoComprador} <strong>${v.compradorTermo}</strong> a salvo de cobranças e contestações futuras, e a responder pela evicção de direitos.
         </p>
       </section>
 
       <div class="pt-6 text-center font-serif">
         <p class="font-bold text-slate-800 text-sm">
-          Santarém/PA, ${v.dia} de ${v.mesExtenso} de ${v.ano}.
+          ${v.cidadeVendedor}/${v.estadoVendedor}, ${v.dia} de ${v.mesExtenso} de ${v.ano}.
         </p>
       </div>
 
@@ -334,7 +340,7 @@ function generateParceladoContractHTML(sale: SaleRecord): string {
       <!-- CABEÇALHO -->
       <div class="text-center pb-4 border-b-2 border-slate-900 mb-6">
         <h1 class="text-base sm:text-lg font-bold tracking-wider uppercase mb-1">
-          INSTRUMENTO PARTICULAR DE COMPRA E VENDA DE IMÓVEL (PARCELADO)
+          INSTRUMENTO PARTICULAR DE COMPRA E VENDA DE IMÓVEL
         </h1>
         <p class="text-xs sm:text-sm text-slate-600 font-mono">
           Protocolo de Registro: <strong>${sale.codigoVenda}</strong> | Empreendimento: <strong>${v.empreendimento}</strong>
@@ -346,9 +352,7 @@ function generateParceladoContractHTML(sale: SaleRecord): string {
       </div>
 
       <p class="indent-8 text-justify">
-        Pelo presente instrumento particular de compra e venda de imóvel, de um lado 
-        <strong>${v.artigoVendedor} ${v.tratamentoVendedor} ${v.vendedor}</strong>, ${v.nacionalidadeVendedor}, ${v.estadoCivilVendedor}, ${v.portadorVendedor} da carteira de identidade nº ${v.rgVendedor} ${v.emissaoRgVendedor} e do CPF nº <strong>${v.cpfVendedor}</strong>, residente e domiciliad${v.concordanciaVendedor} na ${v.enderecoVendedor}, nº ${v.numeroVendedor}, Bairro ${v.bairroVendedor}, ${v.cidadeVendedor} - ${v.estadoVendedor}, ora em diante chamad${v.concordanciaVendedor} simplesmente <strong>${v.vendedorTermo}</strong>; e de outro lado 
-        <strong>${v.artigoComprador} ${v.tratamentoComprador} ${v.comprador}</strong>, ${v.nacionalidadeComprador}, ${v.estadoCivilComprador}, ${v.portadorComprador} da carteira de identidade nº ${v.rgComprador} ${v.emissaoRgComprador} e do CPF nº <strong>${v.cpfComprador}</strong>, telefone ${v.telefoneVendedor}, residente e domiciliad${v.concordanciaComprador} na ${v.enderecoComprador}, nº ${v.numeroComprador}, Bairro ${v.bairroComprador}, CEP ${v.cepVendedor}, ${v.cidadeComprador} - ${v.estadoComprador}, ora em diante chamad${v.concordanciaComprador} simplesmente <strong>${v.compradorTermo}</strong>, têm, entre si, como justo e contratado o que se segue:
+        Pelo presente instrumento particular de compra e venda de imóvel, de um lado <strong>${v.artigoVendedor} ${v.tratamentoVendedor} ${v.vendedor}</strong>, ${v.nacionalidadeVendedor}, ${v.estadoCivilVendedor}, ${v.portadorVendedor} da carteira de identidade nº ${v.rgVendedor} ${v.emissaoRgVendedor} e do CPF nº <strong>${v.cpfVendedor}</strong>, residente e domiciliad${v.concordanciaVendedor} na ${v.enderecoVendedor}, nº ${v.numeroVendedor}, Bairro ${v.bairroVendedor}, ${v.cidadeVendedor} - ${v.estadoVendedor}, ora em diante chamad${v.concordanciaVendedor} simplesmente <strong>${v.vendedorTermo}</strong>; e de outro lado <strong>${v.artigoComprador} ${v.tratamentoComprador} ${v.comprador}</strong>, ${v.nacionalidadeComprador}, ${v.estadoCivilComprador}, ${v.portadorComprador} da carteira de identidade nº ${v.rgComprador} ${v.emissaoRgComprador} e do CPF nº <strong>${v.cpfComprador}</strong>, telefone ${v.telefoneComprador}, residente e domiciliad${v.concordanciaComprador} na ${v.enderecoComprador}, nº ${v.numeroComprador}, Bairro ${v.bairroComprador}, CEP ${v.cepComprador}, ${v.cidadeComprador} - ${v.estadoComprador}, ora em diante chamad${v.concordanciaComprador} simplesmente <strong>${v.compradorTermo}</strong>, têm, entre si, como justo e contratado o que se segue:
       </p>
 
       <!-- 1º DO OBJETO -->
@@ -360,7 +364,7 @@ function generateParceladoContractHTML(sale: SaleRecord): string {
           A posse que exerce sobre <strong>${v.quantidadeTerreno}</strong> terreno rural, extraído de uma área localizada na <strong>${v.localidade}</strong>, no desmembramento do lote do Empreendimento <strong>${v.empreendimento}</strong>, no município de Santarém/PA, de forma regular. Denominado <strong>Lote ${v.lote}</strong> da <strong>Quadra ${v.quadra}</strong>, ${v.ruaDoLote}, medindo <strong>${v.frente}</strong> metros de frente, lateral direita medindo <strong>${v.lateralDireita}</strong> metros, lateral esquerda medindo <strong>${v.lateralEsquerda}</strong> metros e medindo <strong>${v.fundos}</strong> metros de fundos, com área total de <strong>${v.areaTotal}</strong> metros quadrados.
         </p>
         <p class="indent-8 text-justify">
-          <strong>§ Parágrafo único</strong> - Pelo presente instrumento e na melhor forma de direito, ${v.generoV} <strong>${v.vendedorTermo}</strong>, tem ajustado vender conforme promete ${v.preposicaoComprador} <strong>${v.compradorTermo}</strong>, e este a comprar-lhe o imóvel descrito e caracterizado na cláusula anterior, de forma livre e desembaraçado de quaisquer ônus (real, pessoal, fiscal ou extrajudicial), dívidas, arrestos ou sequestros, ou ainda de restrições de qualquer natureza, pelo preço e de conformidade com as cláusulas e condições adiante estabelecidas.
+          <strong>§ Parágrafo único</strong> - Pelo presente instrumento e na melhor forma de direito, ${v.generoV3} <strong>${v.vendedorTermo}</strong>, tem ajustado vender conforme promete ${v.preposicaoComprador} <strong>${v.compradorTermo}</strong>, e este a comprar-lhe o imóvel descrito e caracterizado na cláusula anterior, de forma livre e desembaraçado de quaisquer ônus (real, pessoal, fiscal ou extrajudicial), dívidas, arrestos ou sequestros, ou ainda de restrições de qualquer natureza, pelo preço e de conformidade com as cláusulas e condições adiante estabelecidas.
         </p>
       </section>
 
@@ -370,7 +374,7 @@ function generateParceladoContractHTML(sale: SaleRecord): string {
           2º - DO VALOR
         </h3>
         <p class="indent-8 text-justify">
-          O preço certa e ajustada da venda ora prometida é de <strong>R$ ${v.valorTotal}</strong> (${v.valorTotalExtenso}), sendo que o valor de <strong>R$ ${v.entrada}</strong> será pago a título de sinal na data da assinatura deste contrato e o restante do valor <strong>R$ ${v.restante}</strong> (${v.restanteExtenso}), através de <strong>${v.quantidadeParcelas}</strong> parcelas ${v.modoPagamento}, no valor de <strong>R$ ${v.valorParcela}</strong> (${v.valorParcelaExtenso}), com vencimento todo dia <strong>${v.dataVencimento}</strong>, ficando a primeira parcela para o dia <strong>${v.dataPrimeiraParcela}</strong> e o restante para os meses subsequentes.
+          O preço certa e ajustada da venda ora prometida é de <strong>R$ ${v.valorTotal}</strong>, sendo que o valor de <strong>R$ ${v.entrada}</strong> será pago a título de sinal na data da assinatura deste contrato e o restante do valor <strong>R$ ${v.restante}</strong>, através de <strong>${v.quantidadeParcelas}</strong> parcelas ${v.modoPagamento}, no valor de <strong>R$ ${v.valorParcela}</strong>, com vencimento todo dia <strong>${v.dataVencimento}</strong>, ficando a primeira parcela para o dia <strong>${v.dataPrimeiraParcela}</strong> e o restante para os meses subsequentes.
         </p>
       </section>
 
@@ -426,7 +430,7 @@ function generateParceladoContractHTML(sale: SaleRecord): string {
           7º - DA DESISTÊNCIA
         </h3>
         <p class="indent-8 text-justify">
-          A parte que desistir do negócio ou der causa à rescisão deste contrato arcará com multa de <strong>20% (vinte por cento)</strong> do valor do presente contrato, a ser pago à outra parte, sem prejuízo das perdas e danos decorrentes do ato.
+          A parte que desistir do negócio ou der causa à rescisão deste contrato arcará com multa de <strong>20%</strong> do valor do presente contrato, a ser pago à outra parte, sem prejuízo das perdas e danos decorrentes do ato.
         </p>
       </section>
 
@@ -535,11 +539,11 @@ function generateParceladoContractHTML(sale: SaleRecord): string {
       <div class="pt-6 space-y-8">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 text-center pt-4">
           <div class="border-t border-slate-900 pt-2">
-            <p class="font-bold uppercase text-xs sm:text-sm">[VENDEDOR_TERMO] - ${v.vendedor}</p>
+            <p class="font-bold uppercase text-xs sm:text-sm">[${v.vendedorTermo}] - ${v.vendedor}</p>
             <p class="text-xs text-slate-600">CPF nº ${v.cpfVendedor}</p>
           </div>
           <div class="border-t border-slate-900 pt-2">
-            <p class="font-bold uppercase text-xs sm:text-sm">[COMPRADOR_TERMO] - ${v.comprador}</p>
+            <p class="font-bold uppercase text-xs sm:text-sm">[${v.compradorTermo}] - ${v.comprador}</p>
             <p class="text-xs text-slate-600">CPF nº ${v.cpfComprador}</p>
           </div>
         </div>

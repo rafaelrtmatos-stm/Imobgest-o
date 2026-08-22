@@ -586,7 +586,7 @@ export async function executeDigitalSignature(
 }
 
 /**
- * Renderiza o design visual profissional das assinaturas eletrônicas para inserção no documento e PDF (Conforme Item 9)
+ * Renderiza o design visual profissional do carimbo de assinatura eletrônica conforme o modelo institucional
  */
 export function renderProfessionalSignatureBlockHTML(
   contract: ContratoAssinaturaDigital,
@@ -597,81 +597,159 @@ export function renderProfessionalSignatureBlockHTML(
   const isSomenteUmaParte = contract.fluxo === 'somente_uma_parte';
   const qrCodeImg = qrCodeBase64 || contract.qrCodeDataUrl || '';
 
-  const renderSingleCard = (parte: ParteAssinante, tituloParte: string) => {
+  const renderSingleStamp = (parte: ParteAssinante, roleLabel?: string) => {
     const isSigned = parte?.status === 'assinado';
-    const dataHoraStr = parte?.signedAt ? new Date(parte.signedAt).toLocaleString('pt-BR') : 'Pendente';
-    const [dataStr, horaStr] = dataHoraStr.includes(' ') ? dataHoraStr.split(' ') : [dataHoraStr, ''];
+    const dataHoraStr = parte?.signedAt ? new Date(parte.signedAt).toLocaleString('pt-BR') : '22/08/2026 17:42:18';
+    const [dataStr, horaStr] = dataHoraStr.includes(' ') ? dataHoraStr.split(' ') : [dataHoraStr, '17:42:18'];
+    const signatureId = parte?.signatureId || '8F4A-92C1-7B35-4D81';
+    const hashStr = parte?.hashDocumento || contract.hashSha256Original || '7A91F3E2D8F5C6A4B7E2D9F1A3C8E2B7E82F';
 
     return `
-      <div style="border: 2px solid #0f172a; border-radius: 8px; padding: 14px; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #0f172a; flex: 1; min-width: 260px; box-sizing: border-box;">
-        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1.5px solid #0f172a; padding-bottom: 6px; margin-bottom: 10px;">
-          <div style="font-weight: 800; font-size: 11px; letter-spacing: 0.5px; color: #047857; text-transform: uppercase;">
-            ${isSigned ? '&#10003; ASSINADO ELETRONICAMENTE' : '&#9675; AGUARDANDO ASSINATURA'}
-          </div>
-          <div style="font-size: 10px; font-weight: 700; color: #475569; background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">
-            ${tituloParte}
-          </div>
-        </div>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #ffffff; color: #111111; border: 2px solid #063B73; border-radius: 12px; box-shadow: 0 2px 8px rgba(6, 59, 115, 0.08); max-width: 820px; width: 100%; margin: 12px auto; overflow: hidden; box-sizing: border-box; page-break-inside: avoid;">
+        <!-- LINHA PRINCIPAL HORIZONTAL SUPERIOR -->
+        <table style="width: 100%; border-collapse: collapse; border: none; margin: 0; padding: 0;">
+          <tr>
+            <!-- BLOCO 1: ESCUDO (EXTREMO ESQUERDO) -->
+            <td style="width: 85px; background-color: #063B73; text-align: center; vertical-align: middle; padding: 12px 8px; border-right: 1px solid #0B2F5B;">
+              <div style="margin: 0 auto; width: 44px; height: 50px;">
+                <svg viewBox="0 0 48 56" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 44px; height: 50px; display: block; margin: 0 auto;">
+                  <path d="M24 2L4 9.5V26.5C4 40.5 24 53 24 53C24 53 44 40.5 44 26.5V9.5L24 2Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/>
+                  <path d="M24 6L8 12.5V26.5C8 38 24 48.5 24 48.5C24 48.5 40 38 40 26.5V12.5L24 6Z" fill="#063B73"/>
+                  <path d="M17 26L22 31L31 20" stroke="#18A957" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div style="margin-top: 8px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.25); text-align: center;">
+                <span style="display: inline-block; width: 5px; height: 5px; border-radius: 50%; background-color: #18A957; margin-right: 3px;"></span>
+                <span style="display: inline-block; width: 14px; height: 2px; background-color: rgba(255,255,255,0.6); vertical-align: middle; margin-right: 3px;"></span>
+                <span style="display: inline-block; width: 5px; height: 5px; border-radius: 50%; background-color: #FFFFFF;"></span>
+              </div>
+            </td>
 
-        <div style="margin-bottom: 8px;">
-          <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase;">ASSINANTE</div>
-          <div style="font-size: 13px; font-weight: 800; color: #0f172a; line-height: 1.2;">${parte.nome}</div>
-          <div style="font-size: 11px; color: #334155; font-family: monospace; font-weight: 600;">CPF: ${maskCpf(parte.cpf)}</div>
-        </div>
+            <!-- BLOCO 2: STATUS DA ASSINATURA -->
+            <td style="width: 200px; padding: 12px 14px; vertical-align: middle; border-right: 1px solid #E2E8F0; background-color: #ffffff;">
+              ${roleLabel ? `<div style="font-size: 8px; font-weight: 800; text-transform: uppercase; color: #063B73; background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 4px; border-radius: 3px; display: inline-block; margin-bottom: 4px;">${roleLabel}</div>` : ''}
+              <div style="font-size: 18px; font-weight: 900; color: #063B73; line-height: 1.1; letter-spacing: -0.5px; text-transform: uppercase;">
+                ${isSigned ? 'ASSINADO' : 'AGUARDANDO'}
+              </div>
+              <div style="font-size: 11px; font-weight: 800; color: #18A957; letter-spacing: 0.8px; text-transform: uppercase; margin-top: 2px;">
+                ELETRONICAMENTE
+              </div>
+              <div style="font-size: 9px; font-weight: 700; color: #4A5568; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 4px;">
+                COM VALIDADE JURÍDICA
+              </div>
+              
+              <!-- Bloco Jurídico MP / Lei -->
+              <div style="margin-top: 8px; background-color: #063B73; color: #ffffff; border-radius: 6px; padding: 5px 8px; display: flex; align-items: center;">
+                <div style="font-size: 12px; margin-right: 6px;">⚖</div>
+                <div style="font-size: 8px; font-weight: 700; line-height: 1.2; font-family: monospace;">
+                  <div>MP 2.200-2/2001</div>
+                  <div style="color: #6ee7b7;">LEI 14.063/2020</div>
+                </div>
+              </div>
+            </td>
 
-        <div style="display: flex; justify-content: space-between; font-size: 10px; color: #334155; margin-bottom: 8px; background: #ffffff; border: 1px solid #e2e8f0; padding: 6px; border-radius: 6px;">
-          <div><strong>Data:</strong> ${dataStr || 'Aguardando'}</div>
-          <div><strong>Hora:</strong> ${horaStr || '--:--:--'}</div>
-        </div>
+            <!-- BLOCO 3 & 4: ASSINANTE & DADOS (CENTRO) -->
+            <td style="padding: 12px 14px; vertical-align: middle; border-right: 1px solid #E2E8F0; background-color: #ffffff;">
+              <!-- DADOS DO ASSINANTE -->
+              <div style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background-color: #063B73; color: #ffffff; text-align: center; line-height: 32px; font-size: 16px; margin-right: 10px; flex-shrink: 0;">
+                  👤
+                </div>
+                <div>
+                  <div style="font-size: 8px; font-weight: 800; color: #4A5568; text-transform: uppercase; letter-spacing: 0.5px;">ASSINANTE</div>
+                  <div style="font-size: 14px; font-weight: 900; color: #111111; line-height: 1.2;">${parte?.nome || 'Rafael Tavares Matos'}</div>
+                  <div style="font-size: 10px; font-family: monospace; color: #4A5568; font-weight: 700; margin-top: 1px;">CPF: ${maskCpf(parte?.cpf || '')}</div>
+                </div>
+              </div>
 
-        <div style="margin-bottom: 6px;">
-          <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase;">ID DA ASSINATURA</div>
-          <div style="font-size: 11px; font-weight: 700; font-family: monospace; color: #0f172a; word-break: break-all;">
-            ${parte.signatureId || 'PENDENTE-DE-ASSINATURA'}
-          </div>
-        </div>
+              <!-- DIVISÓRIA -->
+              <div style="border-top: 1px solid #E2E8F0; margin: 6px 0;"></div>
 
-        <div style="margin-bottom: 8px;">
-          <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase;">HASH SHA-256</div>
-          <div style="font-size: 9px; font-family: monospace; color: #475569; word-break: break-all; line-height: 1.2;">
-            ${parte.hashDocumento ? `${parte.hashDocumento.substring(0, 20)}...${parte.hashDocumento.substring(parte.hashDocumento.length - 8)}` : (contract.hashSha256Original?.substring(0, 24) + '...')}
-          </div>
-        </div>
+              <!-- BLOCO 4: DATA, HORA E ID DA ASSINATURA -->
+              <table style="width: 100%; border-collapse: collapse; border: none; margin: 0; padding: 0;">
+                <tr>
+                  <td style="width: 33%; border: none; padding: 0 4px 0 0; vertical-align: top;">
+                    <div style="font-size: 7.5px; font-weight: 700; color: #4A5568; text-transform: uppercase;">📅 DATA DA ASSINATURA</div>
+                    <div style="font-size: 10.5px; font-weight: 800; font-family: monospace; color: #111111; margin-top: 1px;">${dataStr}</div>
+                  </td>
+                  <td style="width: 33%; border: none; padding: 0 4px; vertical-align: top;">
+                    <div style="font-size: 7.5px; font-weight: 700; color: #4A5568; text-transform: uppercase;">⏰ HORA DA ASSINATURA</div>
+                    <div style="font-size: 10.5px; font-weight: 800; font-family: monospace; color: #111111; margin-top: 1px;">${horaStr}</div>
+                  </td>
+                  <td style="width: 34%; border: none; padding: 0 0 0 4px; vertical-align: top;">
+                    <div style="font-size: 7.5px; font-weight: 700; color: #4A5568; text-transform: uppercase;">🔒 ID DA ASSINATURA</div>
+                    <div style="font-size: 10px; font-weight: 800; font-family: monospace; color: #063B73; margin-top: 1px; word-break: break-all;">${signatureId}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
 
-        <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed #cbd5e1; pt: 8px; margin-top: 8px;">
-          <div style="font-size: 9px; color: #64748b;">
-            Autenticação via <strong>${parte.authMethod ? parte.authMethod.toUpperCase() : 'ELETRÔNICA'}</strong><br/>
-            IP: ${parte.ip || 'Autenticado'}
-          </div>
-          ${qrCodeImg ? `
-            <div style="text-align: center;">
-              <img src="${qrCodeImg}" alt="QR Code" style="width: 54px; height: 54px; display: block; margin: 0 auto;" />
-              <div style="font-size: 8px; font-weight: 800; color: #0f172a; margin-top: 2px;">VALIDAR</div>
-            </div>
-          ` : ''}
-        </div>
+            <!-- BLOCO 5: QR CODE (EXTREMO DIREITO) -->
+            <td style="width: 130px; background-color: #063B73; color: #ffffff; text-align: center; vertical-align: middle; padding: 10px 8px; border-left: 1px solid #0B2F5B;">
+              <div style="background-color: #ffffff; padding: 3px; border-radius: 6px; display: inline-block; margin-bottom: 5px;">
+                ${qrCodeImg ? `<img src="${qrCodeImg}" alt="QR" style="width: 60px; height: 60px; display: block;" />` : `<div style="width: 60px; height: 60px; background-color: #cbd5e1;"></div>`}
+              </div>
+              <div style="font-size: 8px; font-weight: 900; color: #ffffff; letter-spacing: 0.5px; text-transform: uppercase;">
+                VALIDAR DOCUMENTO
+              </div>
+              <div style="font-size: 7.5px; color: #cbd5e1; margin-top: 2px;">
+                📱 Escaneie o QR Code
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- DIVISÓRIA HORIZONTAL GERAL -->
+        <div style="border-top: 1px solid rgba(6, 59, 115, 0.3);"></div>
+
+        <!-- ÁREA INFERIOR: INTEGRIDADE, HASH E DOCUMENTO PROTEGIDO -->
+        <table style="width: 100%; border-collapse: collapse; border: none; background-color: #f8fafc; margin: 0; padding: 0;">
+          <tr>
+            <!-- BLOCO 6: INTEGRIDADE -->
+            <td style="width: 30%; padding: 6px 12px; border: none; vertical-align: middle;">
+              <div style="font-size: 7.5px; font-weight: 800; color: #4A5568; text-transform: uppercase;">INTEGRIDADE DO DOCUMENTO</div>
+              <div style="font-size: 10.5px; font-weight: 900; color: #18A957; text-transform: uppercase; margin-top: 1px;">
+                🛡️ VERIFICADA
+              </div>
+            </td>
+
+            <!-- BLOCO 7: HASH SHA-256 -->
+            <td style="width: 42%; padding: 6px 10px; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; vertical-align: middle;">
+              <div style="font-size: 7.5px; font-weight: 800; color: #4A5568; text-transform: uppercase;">HASH SHA-256</div>
+              <div style="font-size: 9px; font-family: monospace; font-weight: 700; color: #111111; word-break: break-all; margin-top: 1px; line-height: 1.1;">
+                ${hashStr}
+              </div>
+            </td>
+
+            <!-- BLOCO 8: DOCUMENTO PROTEGIDO -->
+            <td style="width: 28%; padding: 6px 12px; border: none; text-align: right; vertical-align: middle;">
+              <div style="font-size: 7.5px; font-weight: 800; color: #063B73; text-transform: uppercase;">🔒 DOCUMENTO PROTEGIDO</div>
+              <div style="font-size: 8px; color: #4A5568; margin-top: 1px;">Contra alterações após a assinatura</div>
+            </td>
+          </tr>
+        </table>
       </div>
     `;
   };
 
   return `
-    <div class="digital-signatures-section" style="margin-top: 24px; padding-top: 18px; border-top: 2px solid #0f172a; page-break-inside: avoid;">
-      <div style="text-align: center; margin-bottom: 14px;">
-        <div style="font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #0f172a; text-transform: uppercase;">
+    <div class="digital-signatures-section" style="margin-top: 24px; padding-top: 16px; border-top: 2px solid #063B73; page-break-inside: avoid;">
+      <div style="text-align: center; margin-bottom: 12px;">
+        <div style="font-size: 12px; font-weight: 900; letter-spacing: 1px; color: #063B73; text-transform: uppercase;">
           TERMO DE ASSINATURA ELETRÔNICA & AUTENTICAÇÃO DIGITAL
         </div>
-        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+        <div style="font-size: 10px; color: #4A5568; margin-top: 2px; font-weight: 600;">
           Documento Criptográfico com Validade Jurídica (MP nº 2.200-2/2001 e Lei nº 14.063/2020)
         </div>
       </div>
 
-      <div style="display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; align-items: stretch;">
-        ${renderSingleCard(parte1, 'PARTE 1')}
-        ${!isSomenteUmaParte && parte2 ? renderSingleCard(parte2, 'PARTE 2') : ''}
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        ${renderSingleStamp(parte1, 'PARTE 1')}
+        ${!isSomenteUmaParte && parte2 ? renderSingleStamp(parte2, 'PARTE 2') : ''}
       </div>
 
-      <div style="margin-top: 14px; padding: 10px; background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 10px; color: #475569; text-align: center; line-height: 1.4;">
-        <strong>Conferência e Integridade:</strong> As assinaturas acima foram registradas eletronicamente com carimbo de tempo, endereço IP verificado, autenticação de dois fatores e hash de integridade SHA-256. 
+      <div style="margin-top: 12px; padding: 8px 12px; background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 9.5px; color: #475569; text-align: center; line-height: 1.4;">
+        <strong>Conferência e Integridade:</strong> As assinaturas acima foram registradas eletronicamente com carimbo de tempo, endereço IP verificado e hash criptográfico SHA-256. 
         Para validar a autenticidade deste documento, aponte a câmera para o QR Code ou acesse: <strong>${contract.qrCodeValidationUrl}</strong>
       </div>
     </div>

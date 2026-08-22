@@ -107,47 +107,64 @@ export const SalesList: React.FC<SalesListProps> = ({
             <div className="flex items-center space-x-2">
               <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-mono font-bold px-2.5 py-0.5 rounded-md flex items-center">
                 <Building2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-                CENTRAL DE VENDAS
+                RELATÓRIO DE VENDAS
               </span>
               <span className="text-[11px] text-slate-500 font-mono">
-                Gestão Imobiliária
+                Extraído dos Contratos Emitidos
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-slate-900 tracking-tight">
-              Base de Vendas & Contratos
+              Relatório de Vendas dos Contratos
             </h1>
             <p className="text-xs sm:text-sm text-slate-600">
-              Controle de transações cadastradas, status de assinaturas e download de minutas contratuais.
+              Extrato consolidado de tudo o que foi vendido através dos contratos gerados: valores totais, entradas, parcelas, compradores e lotes.
             </p>
           </div>
 
-          <button
-            type="button"
-            id="btn-new-sale-list"
-            onClick={onNewSale}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center space-x-2 active:scale-95 cursor-pointer border border-emerald-600"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Cadastrar Nova Venda</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm rounded-xl border border-slate-300 transition-all flex items-center space-x-1.5 cursor-pointer no-print"
+            >
+              <Download className="w-4 h-4 text-slate-600" />
+              <span>Imprimir / Exportar</span>
+            </button>
+            <button
+              type="button"
+              id="btn-new-sale-list"
+              onClick={onNewSale}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center space-x-2 active:scale-95 cursor-pointer border border-emerald-600 no-print"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Novo Contrato de Venda</span>
+            </button>
+          </div>
         </div>
 
-        {/* METRICS ROW */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-200">
+        {/* METRICS ROW ANALÍTICO */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-200">
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 border-l-4 border-l-slate-700">
-            <span className="text-[11px] text-slate-500 font-mono uppercase tracking-wider block font-bold">Total de Vendas</span>
-            <p className="text-2xl font-heading font-extrabold text-slate-900 mt-1 font-mono">{sales.length} <span className="text-xs font-normal text-slate-500">contratos</span></p>
+            <span className="text-[11px] text-slate-500 font-mono uppercase tracking-wider block font-bold">Total de Contratos</span>
+            <p className="text-2xl font-heading font-extrabold text-slate-900 mt-1 font-mono">{sales.length} <span className="text-xs font-normal text-slate-500">emitidos</span></p>
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-xl border border-emerald-300 border-l-4 border-l-emerald-600">
-            <span className="text-[11px] text-emerald-800 font-mono uppercase tracking-wider block font-bold">Volume Total Geral (VGV)</span>
-            <p className="text-2xl font-heading font-extrabold text-emerald-700 mt-1 font-mono">{formatCurrency(totalVendido)}</p>
+          <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200 border-l-4 border-l-emerald-600">
+            <span className="text-[11px] text-emerald-800 font-mono uppercase tracking-wider block font-bold">Valor Total das Vendas</span>
+            <p className="text-2xl font-heading font-extrabold text-emerald-950 mt-1 font-mono">{formatCurrency(totalVendido)}</p>
           </div>
 
-          <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-300 border-l-4 border-l-emerald-500">
-            <span className="text-[11px] text-emerald-800 font-mono uppercase tracking-wider block font-bold">Contratos Assinados</span>
-            <p className="text-2xl font-heading font-extrabold text-emerald-700 mt-1 font-mono">
-              {totalAssinados} <span className="text-xs font-normal text-slate-600">({sales.length > 0 ? Math.round((totalAssinados / sales.length) * 100) : 0}%)</span>
+          <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200 border-l-4 border-l-blue-600">
+            <span className="text-[11px] text-blue-800 font-mono uppercase tracking-wider block font-bold">Entradas em Contrato</span>
+            <p className="text-2xl font-heading font-extrabold text-blue-950 mt-1 font-mono">
+              {formatCurrency(sales.reduce((acc, s) => acc + (s.financial.entrada || 0), 0))}
+            </p>
+          </div>
+
+          <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-200 border-l-4 border-l-amber-600">
+            <span className="text-[11px] text-amber-800 font-mono uppercase tracking-wider block font-bold">Contratos Assinados</span>
+            <p className="text-2xl font-heading font-extrabold text-amber-950 mt-1 font-mono">
+              {totalAssinados} <span className="text-xs font-normal text-amber-700">/ {sales.length} 100% assinados</span>
             </p>
           </div>
         </div>

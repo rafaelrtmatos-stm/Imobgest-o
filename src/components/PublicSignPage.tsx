@@ -24,6 +24,7 @@ import {
   maskPhone, 
   recordContractEvent 
 } from '../utils/digitalSignatureService';
+import { DigitalSignatureStamp } from './DigitalSignatureStamp';
 
 interface PublicSignPageProps {
   token: string;
@@ -211,19 +212,22 @@ export const PublicSignPage: React.FC<PublicSignPageProps> = ({
               </p>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 max-w-md mx-auto text-xs text-left space-y-1 font-mono">
-              <div className="flex justify-between">
-                <span className="text-slate-500">ID da Assinatura:</span>
-                <strong className="text-slate-900">{party.signatureId || contract.validationToken}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Data e Hora:</span>
-                <strong className="text-slate-900">{party.signedAt ? new Date(party.signedAt).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR')}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Status Geral:</span>
-                <span className="text-emerald-700 font-bold">✓ {contract.status === 'assinado_por_todas_as_partes' ? 'ASSINADO POR TODAS AS PARTES' : 'ASSINADO'}</span>
-              </div>
+            <div className="max-w-2xl mx-auto w-full text-left">
+              <DigitalSignatureStamp
+                status="ASSINADO"
+                tipo="ELETRONICAMENTE"
+                validade="COM VALIDADE JURÍDICA"
+                assinante={party.nome}
+                cpf={maskCpf(party.cpf)}
+                data={party.signedAt ? new Date(party.signedAt).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')}
+                hora={party.signedAt ? new Date(party.signedAt).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR')}
+                id={party.signatureId || contract.validationToken}
+                hash={party.hashDocumento || contract.hashSha256Original}
+                integridade="VERIFICADA"
+                validationUrl={contract.qrCodeValidationUrl}
+                qrCodeUrl={contract.qrCodeDataUrl}
+                roleLabel={party.label}
+              />
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">

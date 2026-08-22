@@ -12,11 +12,14 @@ import {
   Info,
   RefreshCw,
   FolderKanban,
-  FileCode2
+  FileCode2,
+  Database,
+  Cloud
 } from 'lucide-react';
-import { CompanyConfig, DocumentTemplate, SaleRecord } from '../types';
+import { AppUser, Cliente, CompanyConfig, Corretor, DocumentTemplate, Empreendimento, SaleRecord } from '../types';
 import { maskCNPJ, maskPhone } from '../utils/formatters';
 import { WordTemplateManager } from './WordTemplateManager';
+import { SupabaseSyncPanel } from './SupabaseSyncPanel';
 
 interface CompanySettingsProps {
   config: CompanyConfig;
@@ -25,8 +28,21 @@ interface CompanySettingsProps {
   onSaveTemplates: (templates: DocumentTemplate[]) => void;
   onOpenGenerator: (template?: DocumentTemplate, sale?: SaleRecord) => void;
   sales?: SaleRecord[];
-  activeSubTab?: 'empresa' | 'modelos';
-  onChangeSubTab?: (tab: 'empresa' | 'modelos') => void;
+  clientes?: Cliente[];
+  empreendimentos?: Empreendimento[];
+  corretores?: Corretor[];
+  users?: AppUser[];
+  onDataImported?: (data: {
+    sales?: SaleRecord[];
+    clientes?: Cliente[];
+    empreendimentos?: Empreendimento[];
+    corretores?: Corretor[];
+    wordTemplates?: DocumentTemplate[];
+    companyConfig?: CompanyConfig;
+    users?: AppUser[];
+  }) => void;
+  activeSubTab?: 'empresa' | 'modelos' | 'supabase';
+  onChangeSubTab?: (tab: 'empresa' | 'modelos' | 'supabase') => void;
 }
 
 export const CompanySettings: React.FC<CompanySettingsProps> = ({
@@ -36,13 +52,18 @@ export const CompanySettings: React.FC<CompanySettingsProps> = ({
   onSaveTemplates,
   onOpenGenerator,
   sales = [],
+  clientes = [],
+  empreendimentos = [],
+  corretores = [],
+  users = [],
+  onDataImported,
   activeSubTab = 'empresa',
   onChangeSubTab,
 }) => {
-  const [internalTab, setInternalTab] = useState<'empresa' | 'modelos'>(activeSubTab);
+  const [internalTab, setInternalTab] = useState<'empresa' | 'modelos' | 'supabase'>(activeSubTab);
   const currentTab = onChangeSubTab ? activeSubTab : internalTab;
 
-  const handleTabChange = (tab: 'empresa' | 'modelos') => {
+  const handleTabChange = (tab: 'empresa' | 'modelos' | 'supabase') => {
     if (onChangeSubTab) {
       onChangeSubTab(tab);
     } else {
@@ -66,7 +87,7 @@ export const CompanySettings: React.FC<CompanySettingsProps> = ({
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* NAVEGAÇÃO DE SUB-ABAS EM CONFIGURAÇÕES */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
           <button
             type="button"
             id="tab-settings-empresa"
@@ -99,10 +120,25 @@ export const CompanySettings: React.FC<CompanySettingsProps> = ({
               {templates.length}
             </span>
           </button>
+
+          <button
+            type="button"
+            id="tab-settings-supabase"
+            onClick={() => handleTabChange('supabase')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              currentTab === 'supabase'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>Banco na Nuvem (Supabase)</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+          </button>
         </div>
 
         <div className="text-xs text-slate-500 hidden md:flex items-center space-x-1 font-medium pr-2">
-          <span>Configurações globais de contratos e dados institucionais</span>
+          <span>Configurações globais, banco de dados e modelos</span>
         </div>
       </div>
 
@@ -340,6 +376,22 @@ export const CompanySettings: React.FC<CompanySettingsProps> = ({
             sales={sales}
             onOpenGenerator={onOpenGenerator}
             isSettingsMode={true}
+          />
+        </div>
+      )}
+
+      {/* ABA 3: BANCO DE DADOS NA NUVEM (SUPABASE) */}
+      {currentTab === 'supabase' && (
+        <div className="space-y-6">
+          <SupabaseSyncPanel
+            sales={sales}
+            clientes={clientes}
+            empreendimentos={empreendimentos}
+            corretores={corretores}
+            wordTemplates={templates}
+            companyConfig={config}
+            users={users}
+            onDataImported={onDataImported}
           />
         </div>
       )}
