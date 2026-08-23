@@ -4,24 +4,19 @@ import {
   CheckCircle2, 
   Clock, 
   FileText, 
-  MessageSquare, 
-  Smartphone, 
-  Mail, 
-  KeyRound, 
   Download, 
   ArrowLeft, 
   X,
   ExternalLink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { ContratoAssinaturaDigital, MetodoAutenticacao, ParteAssinante } from '../types/digitalSignature';
+import { ContratoAssinaturaDigital, ParteAssinante } from '../types/digitalSignature';
 import { 
+  confirmPartyIdentity,
   downloadSignedContractPdf, 
   executeDigitalSignature, 
   getDigitalContractByToken, 
   maskCpf, 
-  maskEmail, 
-  maskPhone, 
   recordContractEvent 
 } from '../utils/digitalSignatureService';
 import { DigitalSignatureStamp } from './DigitalSignatureStamp';
@@ -43,13 +38,16 @@ export const PublicSignPage: React.FC<PublicSignPageProps> = ({
   } | null>(null);
 
   const [hasAgreedTerms, setHasAgreedTerms] = useState(false);
-  const [authMethod, setAuthMethod] = useState<MetodoAutenticacao>('whatsapp');
   const [otpCode, setOtpCode] = useState('');
-  const [generatedOtp, setGeneratedOtp] = useState('839214');
-  const [isOtpSent, setIsOtpSent] = useState(false);
   const [otpError, setOtpError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  // ETAPA DE DESBLOQUEIO POR IDENTIDADE (últimos 4 dígitos do CPF/CNPJ)
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [last4Input, setLast4Input] = useState('');
+  const [identityError, setIdentityError] = useState('');
+  const [isVerifyingIdentity, setIsVerifyingIdentity] = useState(false);
 
   useEffect(() => {
     const result = getDigitalContractByToken(token);
@@ -57,17 +55,37 @@ export const PublicSignPage: React.FC<PublicSignPageProps> = ({
       setData(result);
       if (result.party.status === 'assinado') {
         setIsSuccess(true);
+        setIsUnlocked(true);
       }
 
-      // Registrar abertura pela Parte 2
+      // Registrar abertura pela parte (link acessado, contrato ainda bloqueado)
       recordContractEvent(
         result.contract.id,
         'PARTE_2_ABRIU',
         result.party.nome,
-        `${result.party.nome} acessou o link exclusivo de assinatura (${result.party.tokenAssinatura}).`
+        `${result.party.nome} acessou o link exclusivo de assinatura (${result.party.tokenAssinatura}). Contrato permanece bloqueado até confirmação de identidade.`
       );
     }
   }, [token]);
+
+  const handleConfirmIdentity = () => {
+    if (!data) return;
+    setIdentityError('');
+    if (last4Input.replace(/\D/g, '').length !== 4) {
+      setIdentityError('Informe os 4 últimos dígitos do CPF/CNPJ.');
+      return;
+    }
+    setIsVerifyingIdentity(true);
+    const res = confirmPartyIdentity(data.contract.id, data.party.tokenAssinatura, last4Input);
+    setIsVerifyingIdentity(false);
+
+    if (res.success && res.contract && res.party) {
+      setData({ contract: res.contract, party: res.party });
+      setIsUnlocked(true);
+    } else {
+      setIdentityError('Dígitos informados não conferem com o CPF/CNPJ cadastrado para esta parte.');
+    }
+  };
 
   if (!data) {
     return (
@@ -95,21 +113,9 @@ export const PublicSignPage: React.FC<PublicSignPageProps> = ({
 
   const { contract, party } = data;
 
-  const handleSendOtp = (method: MetodoAutenticacao = authMethod) => {
-    const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(randomCode);
-    setIsOtpSent(true);
-    setOtpError('');
-    setOtpCode('');
-
-    setTimeout(() => {
-      setOtpCode(randomCode);
-    }, 400);
-  };
-
   const handleSign = async () => {
-    if (otpCode.trim() !== generatedOtp.trim() && otpCode.length < 4) {
-      setOtpError('Código de autenticação inválido. Por favor, digite os 6 dígitos recebidos.');
+    if (otpCode.trim().length !== 6) {
+      setOtpError('Digite o código de 6 dígitos enviado pela imobiliária.');
       return;
     }
 
@@ -118,7 +124,7 @@ export const PublicSignPage: React.FC<PublicSignPageProps> = ({
       const res = await executeDigitalSignature(
         contract.id,
         party.tokenAssinatura,
-        authMethod,
+        'link',
         otpCode,
         null
       );
@@ -252,9 +258,74 @@ export const PublicSignPage: React.FC<PublicSignPageProps> = ({
               )}
             </div>
           </div>
+        ) : !isUnlocked ? (
+          /* ETAPA DE BLOQUEIO: CONTRATO BORRADO ATÉ CONFIRMAÇÃO DE IDENTIDADE */
+          <div className="relative bg-white rounded-2xl border-2 border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 sm:p-8 blur-sm pointer-events-none select-none opacity-60">
+              <div className="h-72 rounded-xl border-2 border-slate-300 bg-slate-50 p-6 space-y-3">
+                <div className="h-4 w-2/3 bg-slate-300 rounded" />
+                <div className="h-3 w-full bg-slate-200 rounded" />
+                <div className="h-3 w-full bg-slate-200 rounded" />
+                <div className="h-3 w-5/6 bg-slate-200 rounded" />
+                <div className="h-3 w-full bg-slate-200 rounded" />
+                <div className="h-3 w-3/4 bg-slate-200 rounded" />
+              </div>
+            </div>
+
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl border-2 border-emerald-300 shadow-xl p-6 sm:p-8 max-w-sm w-full text-center space-y-4">
+                <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-extrabold text-slate-900 text-sm sm:text-base">
+                    Contrato Bloqueado
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Confirme os 4 últimos dígitos do CPF/CNPJ para desbloquear o contrato.
+                  </p>
+                </div>
+
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={last4Input}
+                  onChange={(e) => {
+                    setLast4Input(e.target.value.replace(/\D/g, ''));
+                    setIdentityError('');
+                  }}
+                  placeholder="••••"
+                  className="w-32 mx-auto text-center text-xl font-mono font-extrabold tracking-widest px-3 py-2 bg-slate-50 border-2 border-slate-300 focus:border-emerald-600 rounded-xl focus:outline-none block"
+                />
+
+                {identityError && (
+                  <p className="text-xs text-red-600 font-bold">{identityError}</p>
+                )}
+
+                <button
+                  type="button"
+                  disabled={isVerifyingIdentity || last4Input.length !== 4}
+                  onClick={handleConfirmIdentity}
+                  className={`w-full py-3 rounded-xl font-bold text-sm transition-all shadow-md flex items-center justify-center space-x-2 cursor-pointer ${
+                    last4Input.length === 4 && !isVerifyingIdentity
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-98'
+                      : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>{isVerifyingIdentity ? 'VERIFICANDO...' : 'DESBLOQUEAR CONTRATO'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
         ) : (
-          /* DOCUMENTO COMPLETO PARA VISUALIZAÇÃO E ROLAGEM + ASSINATURA */
+          /* DOCUMENTO COMPLETO PARA VISUALIZAÇÃO E ROLAGEM + ASSINATURA (IDENTIDADE JÁ CONFIRMADA) */
           <div className="bg-white rounded-2xl p-6 sm:p-8 border-2 border-slate-200 shadow-sm space-y-6">
+            <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold px-4 py-2 rounded-xl flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Identidade confirmada. Contrato desbloqueado para leitura.</span>
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-mono font-bold text-slate-700 uppercase tracking-wider">
@@ -276,103 +347,28 @@ export const PublicSignPage: React.FC<PublicSignPageProps> = ({
                 <input
                   type="checkbox"
                   checked={hasAgreedTerms}
-                  onChange={(e) => {
-                    setHasAgreedTerms(e.target.checked);
-                    if (e.target.checked && !isOtpSent) {
-                      handleSendOtp(authMethod);
-                    }
-                  }}
+                  onChange={(e) => setHasAgreedTerms(e.target.checked)}
                   className="mt-0.5 h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                 />
                 <span className="text-xs sm:text-sm font-bold text-slate-900 leading-snug select-none">
-                  Li o contrato completo e concordo com seu conteúdo.
+                  Li e concordo com os termos deste contrato.
                 </span>
               </label>
             </div>
 
-            {/* SEÇÃO DE AUTENTICAÇÃO E ASSINATURA */}
+            {/* SEÇÃO DE ASSINATURA COM CÓDIGO DE 6 DÍGITOS ENVIADO PELA IMOBILIÁRIA */}
             {hasAgreedTerms && (
               <div className="bg-emerald-50/60 border-2 border-emerald-300 rounded-2xl p-6 space-y-5 animate-in fade-in duration-200">
                 <div className="space-y-1">
                   <h3 className="font-heading font-extrabold text-slate-900 text-sm sm:text-base">
-                    Autenticação de Identidade do Signatário
+                    Código de Assinatura
                   </h3>
                   <p className="text-xs text-slate-600">
-                    Selecione o canal para receber o código seguro de autenticação:
+                    Digite o código de 6 dígitos exclusivo enviado a você pela imobiliária (WhatsApp ou e-mail) para concluir a assinatura.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMethod('whatsapp');
-                      handleSendOtp('whatsapp');
-                    }}
-                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
-                      authMethod === 'whatsapp'
-                        ? 'border-2 border-emerald-600 bg-emerald-50 text-emerald-950 shadow-xs'
-                        : 'border-slate-300 bg-white hover:border-slate-400 text-slate-700'
-                    }`}
-                  >
-                    <MessageSquare className="w-4 h-4 text-emerald-600" />
-                    <span>WhatsApp</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMethod('sms');
-                      handleSendOtp('sms');
-                    }}
-                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
-                      authMethod === 'sms'
-                        ? 'border-2 border-blue-600 bg-blue-50 text-blue-950 shadow-xs'
-                        : 'border-slate-300 bg-white hover:border-slate-400 text-slate-700'
-                    }`}
-                  >
-                    <Smartphone className="w-4 h-4 text-blue-600" />
-                    <span>SMS</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMethod('email');
-                      handleSendOtp('email');
-                    }}
-                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
-                      authMethod === 'email'
-                        ? 'border-2 border-indigo-600 bg-indigo-50 text-indigo-950 shadow-xs'
-                        : 'border-slate-300 bg-white hover:border-slate-400 text-slate-700'
-                    }`}
-                  >
-                    <Mail className="w-4 h-4 text-indigo-600" />
-                    <span>E-mail</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMethod('adicional');
-                      handleSendOtp('adicional');
-                    }}
-                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
-                      authMethod === 'adicional'
-                        ? 'border-2 border-purple-600 bg-purple-50 text-purple-950 shadow-xs'
-                        : 'border-slate-300 bg-white hover:border-slate-400 text-slate-700'
-                    }`}
-                  >
-                    <KeyRound className="w-4 h-4 text-purple-600" />
-                    <span>Token / 2FA</span>
-                  </button>
-                </div>
-
                 <div className="bg-white border border-slate-300 rounded-xl p-4 text-center space-y-3">
-                  <div className="text-xs text-slate-700">
-                    Código enviado para: <strong className="text-slate-900">{authMethod === 'whatsapp' || authMethod === 'sms' ? maskPhone(party.telefone) : maskEmail(party.email)}</strong>
-                  </div>
-
                   <div className="flex justify-center">
                     <input
                       type="text"
@@ -390,31 +386,20 @@ export const PublicSignPage: React.FC<PublicSignPageProps> = ({
                   {otpError && (
                     <p className="text-xs text-red-600 font-bold">{otpError}</p>
                   )}
-
-                  <div className="flex items-center justify-center space-x-2 text-xs">
-                    <span className="text-slate-500">Não recebeu?</span>
-                    <button
-                      type="button"
-                      onClick={() => handleSendOtp(authMethod)}
-                      className="text-emerald-700 font-bold hover:underline cursor-pointer"
-                    >
-                      Reenviar Código
-                    </button>
-                  </div>
                 </div>
 
                 <button
                   type="button"
-                  disabled={isSubmitting || otpCode.length < 4}
+                  disabled={isSubmitting || otpCode.length !== 6}
                   onClick={handleSign}
                   className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all shadow-md flex items-center justify-center space-x-2 cursor-pointer ${
-                    otpCode.length >= 4 && !isSubmitting
+                    otpCode.length === 6 && !isSubmitting
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-98'
                       : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                   }`}
                 >
                   <ShieldCheck className="w-5 h-5" />
-                  <span>{isSubmitting ? 'REGISTRANDO ASSINATURA...' : 'ASSINAR DOCUMENTO'}</span>
+                  <span>{isSubmitting ? 'REGISTRANDO ASSINATURA...' : 'ASSINAR'}</span>
                 </button>
               </div>
             )}

@@ -418,6 +418,99 @@ export function recordContractEvent(
 }
 
 /**
+ * Gera um código de assinatura de 6 dígitos exclusivo para uma parte específica,
+ * com validade configurável (em horas). Este código deve ser copiado pela empresa
+ * e enviado manualmente ao assinante (WhatsApp/e-mail), junto do link exclusivo.
+ * Nunca reutiliza código, link ou ID entre partes diferentes.
+ */
+export function generateSignatureCode(
+  contractId: string,
+  partyIdOrToken: string,
+  validityHours: number = 72
+): { contract: ContratoAssinaturaDigital; party: ParteAssinante; code: string } {
+  const list = getStoredDigitalContracts();
+  const contract = list.find(c => c.id === contractId || c.contractId === contractId);
+  if (!contract) throw new Error('Contrato não encontrado no sistema.');
+
+  const party = contract.partes.find(p => p.id === partyIdOrToken || p.tokenAssinatura === partyIdOrToken);
+  if (!party) throw new Error('Signatário não identificado para este contrato.');
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const now = new Date();
+  const validUntil = new Date(now.getTime() + validityHours * 60 * 60 * 1000);
+
+  party.codigoAssinatura = code;
+  party.codigoGeradoEm = now.toISOString();
+  party.codigoValidoAte = validUntil.toISOString();
+  party.codigoUtilizado = false;
+  party.codigoUtilizadoEm = undefined;
+
+  const clientInfo = getClientDeviceInfo();
+  const evt: EventoAuditoriaAssinatura = {
+    id: `evt-${Date.now()}-code`,
+    tipo: 'CODIGO_ASSINATURA_GERADO',
+    descricao: `Código de assinatura de 6 dígitos gerado para ${party.label} (${party.nome}), válido até ${validUntil.toLocaleString('pt-BR')}.`,
+    usuario: 'Sistema / Gestão',
+    dataHora: now.toISOString(),
+    dataHoraFormatada: now.toLocaleString('pt-BR'),
+    ip: clientInfo.ip,
+    dispositivo: clientInfo.dispositivo,
+    metadata: { partyId: party.id, validoAte: validUntil.toISOString() },
+  };
+  contract.eventos = [evt, ...(contract.eventos || [])];
+  contract.updatedAt = now.toISOString();
+
+  saveStoredDigitalContracts(list);
+  return { contract, party, code };
+}
+
+/**
+ * Confirma a identidade da parte comparando os últimos 4 dígitos do CPF/CNPJ
+ * informados com o cadastro daquela parte específica. Somente após confirmação
+ * o conteúdo do contrato é liberado para leitura.
+ */
+export function confirmPartyIdentity(
+  contractId: string,
+  partyIdOrToken: string,
+  last4Digits: string
+): { success: boolean; contract: ContratoAssinaturaDigital | null; party: ParteAssinante | null } {
+  const list = getStoredDigitalContracts();
+  const contract = list.find(c => c.id === contractId || c.contractId === contractId);
+  if (!contract) return { success: false, contract: null, party: null };
+
+  const party = contract.partes.find(p => p.id === partyIdOrToken || p.tokenAssinatura === partyIdOrToken);
+  if (!party) return { success: false, contract, party: null };
+
+  const cleanCpf = (party.cpf || '').replace(/\D/g, '');
+  const cleanInput = (last4Digits || '').replace(/\D/g, '');
+  const matches = cleanCpf.length >= 4 && cleanInput.length === 4 && cleanCpf.slice(-4) === cleanInput;
+
+  if (!matches) {
+    return { success: false, contract, party };
+  }
+
+  party.identidadeConfirmada = true;
+  party.identidadeConfirmadaEm = new Date().toISOString();
+
+  const clientInfo = getClientDeviceInfo();
+  const evt: EventoAuditoriaAssinatura = {
+    id: `evt-${Date.now()}-ident`,
+    tipo: 'IDENTIDADE_CONFIRMADA',
+    descricao: `${party.nome} confirmou identidade com os últimos 4 dígitos do CPF/CNPJ e desbloqueou o contrato para leitura.`,
+    usuario: party.nome,
+    dataHora: new Date().toISOString(),
+    dataHoraFormatada: new Date().toLocaleString('pt-BR'),
+    ip: clientInfo.ip,
+    dispositivo: `${clientInfo.dispositivo} (${clientInfo.sistemaOperacional} / ${clientInfo.navegador})`,
+  };
+  contract.eventos = [evt, ...(contract.eventos || [])];
+  contract.updatedAt = new Date().toISOString();
+
+  saveStoredDigitalContracts(list);
+  return { success: true, contract, party };
+}
+
+/**
  * Atualiza o fluxo de assinatura do contrato
  */
 export function updateContractFluxo(
@@ -462,6 +555,20 @@ export async function executeDigitalSignature(
     throw new Error('Signatário não identificado para este contrato.');
   }
 
+  // Validação obrigatória do código de assinatura de 6 dígitos pertencente exclusivamente a esta parte
+  if (!party.codigoAssinatura) {
+    throw new Error('Nenhum código de assinatura foi gerado para esta parte. Solicite um novo código à imobiliária.');
+  }
+  if (party.codigoUtilizado) {
+    throw new Error('Este código de assinatura já foi utilizado anteriormente.');
+  }
+  if (party.codigoValidoAte && new Date() > new Date(party.codigoValidoAte)) {
+    throw new Error('O código de assinatura expirou. Solicite um novo código à imobiliária.');
+  }
+  if (authCode.trim() !== party.codigoAssinatura.trim()) {
+    throw new Error('Código de assinatura incorreto. Confira o código de 6 dígitos enviado pela imobiliária.');
+  }
+
   if (party.status === 'assinado') {
     return {
       success: true,
@@ -491,6 +598,20 @@ export async function executeDigitalSignature(
   party.timezone = clientInfo.timezone;
   party.hashDocumento = hashDoMomento;
   party.signatureImage = signatureImageBase64 || null;
+  party.codigoUtilizado = true;
+  party.codigoUtilizadoEm = nowIso;
+
+  const eventoCodigoUsado: EventoAuditoriaAssinatura = {
+    id: `evt-${Date.now()}-codeused`,
+    tipo: 'CODIGO_ASSINATURA_UTILIZADO',
+    descricao: `Código de assinatura de ${party.label} (${party.nome}) utilizado e invalidado para reuso.`,
+    usuario: party.nome,
+    dataHora: nowIso,
+    dataHoraFormatada: new Date().toLocaleString('pt-BR'),
+    ip: clientInfo.ip,
+    dispositivo: clientInfo.dispositivo,
+  };
+  contract.eventos = [eventoCodigoUsado, ...(contract.eventos || [])];
 
   // Registrar eventos correspondentes
   const eventAssinatura: EventoAuditoriaAssinatura = {

@@ -19,7 +19,8 @@ export type MetodoAutenticacao =
   | 'whatsapp'
   | 'sms'
   | 'email'
-  | 'adicional';
+  | 'adicional'
+  | 'link';
 
 export interface ParteAssinante {
   id: string;
@@ -36,6 +37,15 @@ export interface ParteAssinante {
   signatureImage?: string | null; // Assinatura gráfica ou rubrica digital
   authMethod?: MetodoAutenticacao;
   authCode?: string;
+  // Código de assinatura de 6 dígitos gerado pela empresa (fluxo de assinatura eletrônica com autenticação individual)
+  codigoAssinatura?: string;
+  codigoGeradoEm?: string;
+  codigoValidoAte?: string;
+  codigoUtilizado?: boolean;
+  codigoUtilizadoEm?: string;
+  // Confirmação de identidade via últimos 4 dígitos do CPF/CNPJ (desbloqueio do contrato)
+  identidadeConfirmada?: boolean;
+  identidadeConfirmadaEm?: string;
   ip?: string;
   userAgent?: string;
   dispositivo?: string;
@@ -60,7 +70,9 @@ export type TipoEventoAuditoria =
   | 'ASSINATURA_2_REALIZADA'
   | 'CONTRATO_FINALIZADO'
   | 'DOCUMENTO_ALTERADO'
-  | 'LINK_RECOMPARTILHADO';
+  | 'LINK_RECOMPARTILHADO'
+  | 'CODIGO_ASSINATURA_GERADO'
+  | 'CODIGO_ASSINATURA_UTILIZADO';
 
 export interface EventoAuditoriaAssinatura {
   id: string;

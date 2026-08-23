@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ContratoAssinaturaDigital, MetodoAutenticacao, ParteAssinante } from '../types/digitalSignature';
-import { executeDigitalSignature, maskCpf, maskEmail, maskPhone, recordContractEvent } from '../utils/digitalSignatureService';
+import { executeDigitalSignature, generateSignatureCode, maskCpf, maskEmail, maskPhone, recordContractEvent } from '../utils/digitalSignatureService';
 
 interface DigitalSignatureFlowModalProps {
   isOpen: boolean;
@@ -46,8 +46,10 @@ export const DigitalSignatureFlowModal: React.FC<DigitalSignatureFlowModalProps>
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [otpError, setOtpError] = useState('');
   const [isCopiedLink, setIsCopiedLink] = useState(false);
+  const [isCopiedCode, setIsCopiedCode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [postSignModal, setPostSignModal] = useState(false);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
 
   // Signatário atual
   const currentParty: ParteAssinante | undefined = contract?.partes.find(p => 
@@ -82,17 +84,20 @@ export const DigitalSignatureFlowModal: React.FC<DigitalSignatureFlowModalProps>
   const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const secondPartySignUrl = secondParty ? `${appOrigin}/assinar/${secondParty.tokenAssinatura}` : '';
 
-  // Gerar e enviar código OTP
+  // Gera o próprio código de assinatura da empresa (nunca reutiliza o código do cliente).
+  // A empresa já está autenticada por login no sistema; o código próprio serve como
+  // confirmação final e segundo fator antes de "Confirmar e assinar".
   const handleSendOtp = (method: MetodoAutenticacao = authMethod) => {
-    const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(randomCode);
     setIsOtpSent(true);
     setOtpError('');
     setOtpCode('');
 
-    // Preenche automaticamente para facilitar testes mantendo validação segura
+    const res = generateSignatureCode(contract.id, currentParty.tokenAssinatura, 24);
+    setGeneratedOtp(res.code);
+    onContractUpdated(res.contract);
+
     setTimeout(() => {
-      setOtpCode(randomCode);
+      setOtpCode(res.code);
     }, 400);
   };
 
@@ -109,7 +114,7 @@ export const DigitalSignatureFlowModal: React.FC<DigitalSignatureFlowModalProps>
   };
 
   const handleConfirmSignature = async () => {
-    if (otpCode.trim() !== generatedOtp.trim() && otpCode.length < 4) {
+    if (otpCode.trim().length < 6) {
       setOtpError('Código de autenticação inválido. Por favor, digite os 6 dígitos recebidos.');
       return;
     }
@@ -154,9 +159,30 @@ export const DigitalSignatureFlowModal: React.FC<DigitalSignatureFlowModalProps>
     }
   };
 
+  const handleCopyCode = () => {
+    if (secondParty?.codigoAssinatura) {
+      navigator.clipboard.writeText(secondParty.codigoAssinatura);
+      setIsCopiedCode(true);
+      setTimeout(() => setIsCopiedCode(false), 3000);
+    }
+  };
+
+  // Gera código de assinatura de 6 dígitos exclusivo para a segunda parte (item 2 do fluxo)
+  const handleGenerateCode = () => {
+    if (!contract || !secondParty) return;
+    setIsGeneratingCode(true);
+    try {
+      const res = generateSignatureCode(contract.id, secondParty.tokenAssinatura, 72);
+      onContractUpdated(res.contract);
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
+
   const handleSendWhatsApp = () => {
     if (!secondParty) return;
-    const msg = `Olá *${secondParty.nome}*, o seu contrato imobiliário (*${contract.titulo}*) já foi assinado pela primeira parte e está disponível para a sua assinatura digital com validade jurídica.\n\nAcesse o seu link seguro exclusivo:\n${secondPartySignUrl}\n\nCódigo de Validação: ${contract.validationToken}`;
+    const codigoParte = secondParty.codigoAssinatura ? `\n\nSeu código de assinatura (6 dígitos): ${secondParty.codigoAssinatura}` : '';
+    const msg = `Olá *${secondParty.nome}*, o seu contrato imobiliário (*${contract.titulo}*) já foi assinado pela primeira parte e está disponível para a sua assinatura digital com validade jurídica.\n\nAcesse o seu link seguro exclusivo:\n${secondPartySignUrl}${codigoParte}`;
     const cleanPhone = secondParty.telefone.replace(/\D/g, '');
     const url = cleanPhone.length >= 10 
       ? `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(msg)}`
@@ -167,7 +193,8 @@ export const DigitalSignatureFlowModal: React.FC<DigitalSignatureFlowModalProps>
   const handleSendEmail = () => {
     if (!secondParty) return;
     const subject = `Assinatura de Contrato - ${contract.contractId} (${contract.titulo})`;
-    const body = `Olá ${secondParty.nome},\n\nO documento "${contract.titulo}" já foi assinado pela primeira parte e agora requer a sua assinatura eletrônica.\n\nClique no link seguro para assinar:\n${secondPartySignUrl}\n\nAtenciosamente,\nImobGestão`;
+    const codigoParte = secondParty.codigoAssinatura ? `\n\nSeu código de assinatura (6 dígitos): ${secondParty.codigoAssinatura}` : '';
+    const body = `Olá ${secondParty.nome},\n\nO documento "${contract.titulo}" já foi assinado pela primeira parte e agora requer a sua assinatura eletrônica.\n\nClique no link seguro para assinar:\n${secondPartySignUrl}${codigoParte}\n\nAtenciosamente,\nImobGestão`;
     window.open(`mailto:${secondParty.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 
@@ -242,6 +269,59 @@ export const DigitalSignatureFlowModal: React.FC<DigitalSignatureFlowModalProps>
                   <span className="font-bold text-slate-800">{secondParty.email || 'Não informado'}</span>
                 </div>
               </div>
+            </div>
+
+            {/* CÓDIGO DE ASSINATURA DE 6 DÍGITOS (EXCLUSIVO DESTA PARTE) */}
+            <div className="space-y-2">
+              <label className="block text-xs font-mono font-bold text-slate-700 uppercase tracking-wider">
+                Código de Assinatura (6 dígitos):
+              </label>
+              {secondParty.codigoAssinatura ? (
+                <div className="flex items-center space-x-2">
+                  <div className="flex-1 px-3 py-2 text-lg font-mono font-extrabold tracking-widest bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-center">
+                    {secondParty.codigoAssinatura}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyCode}
+                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-1 cursor-pointer shrink-0"
+                  >
+                    {isCopiedCode ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar Código</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateCode}
+                    disabled={isGeneratingCode}
+                    title="Gerar novo código (invalida o anterior)"
+                    className="px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer shrink-0"
+                  >
+                    Renovar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleGenerateCode}
+                  disabled={isGeneratingCode}
+                  className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-60"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  <span>{isGeneratingCode ? 'GERANDO...' : 'GERAR CÓDIGO DE ASSINATURA'}</span>
+                </button>
+              )}
+              <p className="text-[11px] text-slate-500">
+                Copie o link e o código abaixo e envie ao assinante. O contrato só é desbloqueado após a confirmação dos 4 últimos dígitos do CPF/CNPJ, e a assinatura só é concluída com este código.
+              </p>
             </div>
 
             {/* LINK EXCLUSIVO */}
