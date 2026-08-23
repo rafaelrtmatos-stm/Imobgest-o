@@ -561,7 +561,10 @@ export async function syncAllFromSupabase(): Promise<{
     }
 
     // 6. Config Empresa
-    const { data: configRes, error: configErr } = await client.from('company_config').select('data').eq('id', 'default').single();
+    // Usa maybeSingle() em vez de single(): quando ainda não existe nenhuma
+    // configuração salva (id = 'default'), o PostgREST responde 406 com
+    // .single() — maybeSingle() retorna null silenciosamente nesse caso.
+    const { data: configRes, error: configErr } = await client.from('company_config').select('data').eq('id', 'default').maybeSingle();
     if (!configErr && configRes?.data) {
       resultData.companyConfig = configRes.data;
     }
