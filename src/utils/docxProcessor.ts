@@ -41,8 +41,96 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'CPF / CNPJ do Vendedor / Contratado',
     category: 'Vendedor/Corretor',
     description: 'Documento CPF ou CNPJ do corretor ou empresa contratada',
-    aliases: ['CPF_CNPJ_CONTRATADO', 'CPF_VENDEDOR', 'CNPJ_VENDEDOR', 'CPF_CNPJ_VENDEDOR', 'DOC_VENDEDOR', 'CPF_CORRETOR'],
+    aliases: ['CPF_CNPJ_CONTRATADO', 'CPF_VENDEDOR', 'CNPJ_VENDEDOR', 'CPF_CNPJ_VENDEDOR', 'DOC_VENDEDOR', 'CPF_CORRETOR', 'VENDEDOR_CPF', 'VENDEDOR_CNPJ'],
     exampleValue: '28.910.450/0001-90',
+  },
+  {
+    id: 'tratamento_vendedor',
+    label: 'Tratamento do Vendedor (Sr./Sra.)',
+    category: 'Vendedor/Corretor',
+    description: 'Pronome de tratamento do vendedor/contratado',
+    aliases: ['TRATAMENTO_VENDEDOR', 'TRATAMENTO_CONTRATADO'],
+    exampleValue: 'Sr.',
+  },
+  {
+    id: 'nacionalidade_vendedor',
+    label: 'Nacionalidade do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Nacionalidade do vendedor/contratado pessoa física',
+    aliases: ['NACIONALIDADE_VENDEDOR', 'NACIONALIDADE_CONTRATADO', 'VENDEDOR_NACIONALIDADE'],
+    exampleValue: 'brasileira',
+  },
+  {
+    id: 'estado_civil_vendedor',
+    label: 'Estado Civil do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Estado civil do vendedor/contratado pessoa física',
+    aliases: ['ESTADO_CIVIL_VENDEDOR', 'ESTADOCIVIL_VENDEDOR', 'ESTADO_CIVIL_CONTRATADO', 'VENDEDOR_ESTADO_CIVIL'],
+    exampleValue: 'casado(a)',
+  },
+  {
+    id: 'vendedor_profissao',
+    label: 'Profissão do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Profissão do vendedor/contratado pessoa física',
+    aliases: ['PROFISSAO_VENDEDOR', 'PROFISSAO_CONTRATADO'],
+    exampleValue: 'Corretor de Imóveis',
+  },
+  {
+    id: 'vendedor_rg',
+    label: 'RG do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Número da carteira de identidade do vendedor/contratado',
+    aliases: ['RG_VENDEDOR', 'IDENTIDADE_VENDEDOR', 'RG_CONTRATADO'],
+    exampleValue: '1234567',
+  },
+  {
+    id: 'emissao_rg_vendedor',
+    label: 'Órgão Emissor do RG do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Órgão expedidor da carteira de identidade do vendedor/contratado',
+    aliases: ['EMISSAO_RG_VENDEDOR', 'VENDEDOR_RG_ORGAO', 'ORGAO_EMISSOR_VENDEDOR'],
+    exampleValue: 'SSP/PA',
+  },
+  {
+    id: 'numero_vendedor',
+    label: 'Número do Endereço do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Número do imóvel no endereço do vendedor/contratado',
+    aliases: ['NUMERO_VENDEDOR', 'VENDEDOR_NUMERO'],
+    exampleValue: '1450',
+  },
+  {
+    id: 'bairro_vendedor',
+    label: 'Bairro do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Bairro do endereço do vendedor/contratado',
+    aliases: ['BAIRRO_VENDEDOR', 'VENDEDOR_BAIRRO'],
+    exampleValue: 'Centro',
+  },
+  {
+    id: 'cep_vendedor',
+    label: 'CEP do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'CEP do endereço do vendedor/contratado',
+    aliases: ['CEP_VENDEDOR', 'VENDEDOR_CEP'],
+    exampleValue: '68005-100',
+  },
+  {
+    id: 'cidade_vendedor',
+    label: 'Cidade do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Cidade do endereço do vendedor/contratado',
+    aliases: ['CIDADE_VENDEDOR', 'VENDEDOR_CIDADE'],
+    exampleValue: 'Santarém',
+  },
+  {
+    id: 'estado_vendedor',
+    label: 'UF do Vendedor',
+    category: 'Vendedor/Corretor',
+    description: 'Estado (UF) do endereço do vendedor/contratado',
+    aliases: ['ESTADO_VENDEDOR', 'UF_VENDEDOR', 'VENDEDOR_UF'],
+    exampleValue: 'PA',
   },
   {
     id: 'vendedor_creci',
@@ -97,7 +185,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'CPF do Comprador / Contratante',
     category: 'Comprador',
     description: 'CPF do comprador ou contratante formatado',
-    aliases: ['CPF', 'CPF_COMPRADOR', 'COMPRADOR_CPF', 'DOC_COMPRADOR', 'NUMERO_CPF', 'CPF_CONTRATANTE'],
+    aliases: ['CPF', 'CPF_COMPRADOR', 'COMPRADOR_CPF', 'DOC_COMPRADOR', 'NUMERO_CPF', 'CPF_CONTRATANTE', 'CONTRATANTE_CPF', 'CPF1'],
     exampleValue: '123.456.789-00',
   },
   {
@@ -105,7 +193,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'RG do Comprador / Contratante',
     category: 'Comprador',
     description: 'Documento de identidade do comprador ou contratante',
-    aliases: ['RG', 'RG_COMPRADOR', 'COMPRADOR_RG', 'IDENTIDADE_COMPRADOR', 'RG_CONTRATANTE'],
+    aliases: ['RG', 'RG_COMPRADOR', 'COMPRADOR_RG', 'IDENTIDADE_COMPRADOR', 'RG_CONTRATANTE', 'CONTRATANTE_RG'],
     exampleValue: '4.892.110 SSP/GO',
   },
   {
@@ -113,7 +201,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Estado Civil do Comprador / Contratante',
     category: 'Comprador',
     description: 'Estado civil informado (ex: Casado(a), Solteiro(a))',
-    aliases: ['ESTADOCIVIL', 'ESTADO_CIVIL', 'ESTADO_CIVIL_COMPRADOR', 'COMPRADOR_ESTADOCIVIL', 'ESTADO_CIVIL_CONTRATANTE'],
+    aliases: ['ESTADOCIVIL', 'ESTADO_CIVIL', 'ESTADO_CIVIL_COMPRADOR', 'COMPRADOR_ESTADOCIVIL', 'ESTADO_CIVIL_CONTRATANTE', 'CONTRATANTE_ESTADO_CIVIL', 'COMPRADOR_ESTADO_CIVIL'],
     exampleValue: 'Casado(a)',
   },
   {
@@ -129,15 +217,31 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Profissão do Comprador / Contratante',
     category: 'Comprador',
     description: 'Ocupação profissional do comprador ou contratante',
-    aliases: ['PROFISSAO', 'PROFISSAO_COMPRADOR', 'COMPRADOR_PROFISSAO', 'PROFISSAO_CONTRATANTE'],
+    aliases: ['PROFISSAO', 'PROFISSAO_COMPRADOR', 'COMPRADOR_PROFISSAO', 'PROFISSAO_CONTRATANTE', 'CONTRATANTE_PROFISSAO'],
     exampleValue: 'Engenheiro Agrônomo',
+  },
+  {
+    id: 'emissao_rg_comprador',
+    label: 'Órgão Emissor do RG do Comprador',
+    category: 'Comprador',
+    description: 'Órgão expedidor da carteira de identidade do comprador/contratante',
+    aliases: ['EMISSAO_RG_COMPRADOR', 'COMPRADOR_RG_ORGAO', 'ORGAO_EMISSOR_COMPRADOR'],
+    exampleValue: 'SSP/PA',
+  },
+  {
+    id: 'tratamento_comprador',
+    label: 'Tratamento do Comprador (Sr./Sra.)',
+    category: 'Comprador',
+    description: 'Pronome de tratamento do comprador/contratante',
+    aliases: ['TRATAMENTO_COMPRADOR', 'TRATAMENTO_CONTRATANTE'],
+    exampleValue: 'Sr.',
   },
   {
     id: 'comprador_endereco_completo',
     label: 'Endereço Completo do Comprador / Contratante',
     category: 'Comprador',
     description: 'Logradouro, número, bairro, cidade, UF e CEP concatenados',
-    aliases: ['ENDERECO_COMPLETO', 'COMPRADOR_ENDERECO_COMPLETO', 'DOMICILIO_COMPRADOR', 'ENDERECO_CONTRATANTE', 'COMPRADOR_ENDERECO'],
+    aliases: ['ENDERECO_COMPLETO', 'COMPRADOR_ENDERECO_COMPLETO', 'DOMICILIO_COMPRADOR', 'ENDERECO_CONTRATANTE', 'CONTRATANTE_ENDERECO'],
     exampleValue: 'Rua T-55, nº 890, Setor Bueno, Goiânia - GO, CEP: 74230-100',
   },
   {
@@ -145,7 +249,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Logradouro / Rua do Comprador',
     category: 'Comprador',
     description: 'Rua ou avenida de residência',
-    aliases: ['ENDERECO', 'RUA_COMPRADOR', 'LOGRADOURO_COMPRADOR'],
+    aliases: ['ENDERECO', 'RUA_COMPRADOR', 'LOGRADOURO_COMPRADOR', 'ENDERECO_COMPRADOR'],
     exampleValue: 'Rua T-55',
   },
   {
@@ -153,7 +257,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Número do Endereço do Comprador',
     category: 'Comprador',
     description: 'Número do imóvel residencial',
-    aliases: ['NUMERO', 'NUMERO_ENDERECO', 'COMPRADOR_NUMERO'],
+    aliases: ['NUMERO', 'NUMERO_ENDERECO', 'COMPRADOR_NUMERO', 'NUMERO_COMPRADOR'],
     exampleValue: '890',
   },
   {
@@ -312,7 +416,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Área Total em m²',
     category: 'Imóvel/Lote',
     description: 'Metragem quadrada total do lote',
-    aliases: ['AREA', 'AREA_TOTAL', 'AREA_M2', 'METRAGEM', 'METROS_QUADRADOS'],
+    aliases: ['AREA', 'AREA_TOTAL', 'AREA_M2', 'METRAGEM', 'METROS_QUADRADOS', 'AREA_TOTAL_M2'],
     exampleValue: '360,00 m²',
   },
   {
@@ -320,7 +424,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Metros de Frente',
     category: 'Imóvel/Lote',
     description: 'Dimensão frontal do lote em metros',
-    aliases: ['FRENTE', 'METROS_FRENTE', 'MEDIDA_FRENTE', 'FRENTE_METROS'],
+    aliases: ['FRENTE', 'METROS_FRENTE', 'MEDIDA_FRENTE', 'FRENTE_METROS', 'METRAGEM_FRENTE'],
     exampleValue: '12,00m',
   },
   {
@@ -328,7 +432,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Metros de Fundo',
     category: 'Imóvel/Lote',
     description: 'Dimensão de fundo do lote em metros',
-    aliases: ['FUNDO', 'METROS_FUNDO', 'MEDIDA_FUNDO', 'FUNDO_METROS'],
+    aliases: ['FUNDO', 'METROS_FUNDO', 'MEDIDA_FUNDO', 'FUNDO_METROS', 'FUNDOS', 'METRAGEM_FUNDOS'],
     exampleValue: '30,00m',
   },
   {
@@ -524,7 +628,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Estado da Assinatura',
     category: 'Datas e Geral',
     description: 'Sigla do estado onde o contrato é assinado',
-    aliases: ['ESTADO_ASSINATURA', 'UF_ASSINATURA', 'UF_CONTRATO', 'ESTADO_CONTRATO'],
+    aliases: ['ESTADO_ASSINATURA', 'UF_ASSINATURA', 'UF_CONTRATO', 'ESTADO_CONTRATO', 'UF_FORO', 'UF_IMOVEL'],
     exampleValue: 'PA',
   },
   {
@@ -664,7 +768,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Rua do Lote',
     category: 'Imóvel/Lote',
     description: 'Logradouro onde o lote está situado',
-    aliases: ['RUA_DO_LOTE', 'RUA_LOTE', 'LOGRADOURO_LOTE', 'RUA'],
+    aliases: ['RUA_DO_LOTE', 'RUA_LOTE', 'LOGRADOURO_LOTE', 'RUA', 'ENDERECO_LOTE'],
     exampleValue: 'Rua Projetada A',
   },
   {
@@ -672,7 +776,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Metros Lateral Direita',
     category: 'Imóvel/Lote',
     description: 'Medida lateral direita do terreno',
-    aliases: ['LATERAL_DIREITA', 'MEDIDA_DIREITA', 'LADO_DIREITO'],
+    aliases: ['LATERAL_DIREITA', 'MEDIDA_DIREITA', 'LADO_DIREITO', 'METRAGEM_LATERAL_DIREITA'],
     exampleValue: '30,00',
   },
   {
@@ -680,7 +784,7 @@ export const SYSTEM_FIELDS_CATALOG: SystemFieldDefinition[] = [
     label: 'Metros Lateral Esquerda',
     category: 'Imóvel/Lote',
     description: 'Medida lateral esquerda do terreno',
-    aliases: ['LATERAL_ESQUERDA', 'MEDIDA_ESQUERDA', 'LADO_ESQUERDO'],
+    aliases: ['LATERAL_ESQUERDA', 'MEDIDA_ESQUERDA', 'LADO_ESQUERDO', 'METRAGEM_LATERAL_ESQUERDA'],
     exampleValue: '30,00',
   },
   {
@@ -858,6 +962,8 @@ export function getSystemFieldValue(
     case 'vendedor_creci':
     case 'rg_vendedor':
       return sale.seller.vendedorCreci || companyConfig.creci || '0000000';
+    case 'vendedor_rg':
+      return '0000000';
     case 'emissao_rg_vendedor':
       return 'SSP/PA';
     case 'nacionalidade_vendedor':

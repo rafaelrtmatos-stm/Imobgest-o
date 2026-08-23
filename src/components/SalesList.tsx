@@ -426,7 +426,7 @@ export const SalesList: React.FC<SalesListProps> = ({
               </div>
             </div>
 
-            {/* BOTÕES DE AÇÃO: DOCX, PDF, PDF ASSINADO, VER DOCUMENTO, HISTÓRICO */}
+            {/* BOTÕES DE AÇÃO: DOCX, PDF, ASSINAR DIGITAL */}
             <div className="bg-slate-50 border-t border-slate-200 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 {onGenerateWordDoc && (
@@ -440,7 +440,7 @@ export const SalesList: React.FC<SalesListProps> = ({
                     className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    <span>[ BAIXAR DOCX ]</span>
+                    <span>[ DOC ]</span>
                   </button>
                 )}
 
@@ -454,26 +454,9 @@ export const SalesList: React.FC<SalesListProps> = ({
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer"
                 >
                   <FileText className="w-3.5 h-3.5" />
-                  <span>[ BAIXAR PDF ]</span>
+                  <span>{selectedSaleForContractDetails.signatures.isFullySigned ? '[ PDF ASSINADO ]' : '[ PDF ]'}</span>
                 </button>
 
-                {selectedSaleForContractDetails.signatures.isFullySigned && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const sale = selectedSaleForContractDetails;
-                      setSelectedSaleForContractDetails(null);
-                      onViewContract(sale);
-                    }}
-                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer border border-slate-800"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>[ BAIXAR PDF ASSINADO ]</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center space-x-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -481,12 +464,14 @@ export const SalesList: React.FC<SalesListProps> = ({
                     setSelectedSaleForContractDetails(null);
                     onViewContract(sale);
                   }}
-                  className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs rounded-xl border border-slate-300 flex items-center space-x-1.5 cursor-pointer"
+                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 font-bold text-xs rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer border border-slate-800"
                 >
-                  <Eye className="w-3.5 h-3.5 text-slate-600" />
-                  <span>[ VER DOCUMENTO ]</span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>[ ASSINAR DIGITAL ]</span>
                 </button>
+              </div>
 
+              <div className="flex items-center space-x-2">
                 <button
                   type="button"
                   onClick={() => setSelectedSaleForContractDetails(null)}
