@@ -53,6 +53,7 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ExclusivityLinkManager } from './ExclusivityLinkManager';
 import { ClientExclusividadeFillSign } from './ClientExclusividadeFillSign';
+import { GenericDigitalContractInput } from '../utils/digitalSignatureService';
 
 interface ModularContractGeneratorProps {
   currentUser: AppUser | null;
@@ -61,7 +62,7 @@ interface ModularContractGeneratorProps {
   empreendimentos: Empreendimento[];
   corretores: Corretor[];
   sales: SaleRecord[];
-  onOpenDigitalSignatureFlow?: (contratoData: any) => void;
+  onOpenDigitalSignatureFlow?: (contratoData: GenericDigitalContractInput) => void;
   onNavigateToTemplates?: () => void;
 }
 
@@ -531,26 +532,35 @@ export const ModularContractGenerator: React.FC<ModularContractGeneratorProps> =
   };
 
   // ENVIAR PARA ASSINATURA DIGITAL
+  // Usa o MESMO fluxo de link + CPF/CNPJ + código de 6 dígitos utilizado pelos
+  // demais modelos de contrato (Venda à Vista / Venda Parcelada), conforme regra
+  // única de assinatura digital do sistema.
   const handleSendToDigitalSignature = () => {
     const record = handleSaveContractRecord('AGUARDANDO ASSINATURAS');
     if (onOpenDigitalSignatureFlow) {
       onOpenDigitalSignatureFlow({
         contractId: record.codigoContrato,
         titulo: formData.tituloContrato,
-        tipoContrato: 'Contrato Modular de Intermediação',
+        tipoContrato: 'Exclusividade',
         documentoHtml: generateModularContractHtml(formData),
-        buyer: {
-          nome: formData.contratante.nome || 'Contratante',
-          cpf: formData.contratante.cpf || '',
-          email: formData.contratante.email || '',
-          telefone: formData.contratante.telefone || '',
-        },
-        seller: {
-          vendedorNome: formData.corretor.nome || 'Corretor',
-          vendedorCpfCnpj: formData.corretor.cpfCnpj || '',
-          vendedorEmail: formData.corretor.email || '',
-          vendedorTelefone: formData.corretor.telefone || '',
-        }
+        partes: [
+          {
+            role: 'corretor',
+            label: 'CONTRATADA (Corretor/Imobiliária)',
+            nome: formData.corretor.nome || 'Corretor',
+            cpf: formData.corretor.cpfCnpj || '',
+            email: formData.corretor.email || '',
+            telefone: formData.corretor.telefone || '',
+          },
+          {
+            role: 'parte_1',
+            label: 'CONTRATANTE',
+            nome: formData.contratante.nome || 'Contratante',
+            cpf: formData.contratante.cpf || '',
+            email: formData.contratante.email || '',
+            telefone: formData.contratante.telefone || '',
+          },
+        ],
       });
       showToast('Contrato enviado para o fluxo de Assinatura Digital!');
     } else {

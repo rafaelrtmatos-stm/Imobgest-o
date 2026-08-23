@@ -17,6 +17,8 @@ import { ClientExclusividadeFillSign } from './components/ClientExclusividadeFil
 import { AuthScreen } from './components/AuthScreen';
 import { UserManager } from './components/UserManager';
 import { ModularContractGenerator } from './components/ModularContractGenerator';
+import { GenericDigitalSignatureLinkModal } from './components/GenericDigitalSignatureLinkModal';
+import { GenericDigitalContractInput } from './utils/digitalSignatureService';
 import { 
   AppUser,
   Cliente, 
@@ -75,6 +77,9 @@ export default function App() {
   // Estado da venda atualmente ativa (para formulário, contrato ou assinatura)
   const [activeSale, setActiveSale] = useState<SaleRecord | null>(() => sales[0] || null);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  // Contrato genérico (Exclusividade e demais modelos modulares) enviado ao fluxo
+  // único de assinatura digital (link + CPF/CNPJ + código de 6 dígitos).
+  const [genericSignatureInput, setGenericSignatureInput] = useState<GenericDigitalContractInput | null>(null);
   const [isDocGeneratorOpen, setIsDocGeneratorOpen] = useState(false);
   const [docGeneratorTemplate, setDocGeneratorTemplate] = useState<DocumentTemplate | null>(null);
   const [docGeneratorSale, setDocGeneratorSale] = useState<SaleRecord | null>(null);
@@ -903,10 +908,7 @@ export default function App() {
               handleOpenDocGenerator(template, sale, defaultMode);
             }}
             onOpenDigitalSignatureFlow={(contratoData) => {
-              if (sales.length > 0) {
-                setActiveSale(sales[0]);
-              }
-              setIsSignatureModalOpen(true);
+              setGenericSignatureInput(contratoData);
             }}
             isSettingsMode={false}
             onNavigateToSettings={() => {
@@ -1027,6 +1029,14 @@ export default function App() {
           onSaveSignature={handleSaveSignature}
         />
       )}
+
+      {/* MODAL DE ASSINATURA DIGITAL — CONTRATOS MODULARES / EXCLUSIVIDADE
+          Usa o mesmo fluxo (link + CPF/CNPJ + código de 6 dígitos) dos demais modelos. */}
+      <GenericDigitalSignatureLinkModal
+        isOpen={!!genericSignatureInput}
+        onClose={() => setGenericSignatureInput(null)}
+        input={genericSignatureInput}
+      />
 
       {/* FOOTER */}
       <footer className="bg-white text-slate-500 text-xs py-5 border-t border-slate-200 text-center no-print">

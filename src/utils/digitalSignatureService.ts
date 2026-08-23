@@ -310,6 +310,102 @@ export async function createOrGetDigitalContract(
   return newContract;
 }
 
+export interface GenericSignaturePartyInput {
+  nome: string;
+  cpf: string;
+  email?: string;
+  telefone?: string;
+  role: ParteAssinante['role'];
+  label: string;
+}
+
+export interface GenericDigitalContractInput {
+  contractId: string; // codigoContrato (ex: MOD-2026-0001)
+  titulo: string;
+  tipoContrato: string; // "Venda à Vista" | "Venda Parcelada" | "Exclusividade"
+  documentoHtml: string;
+  partes: GenericSignaturePartyInput[]; // ordem define parte1, parte2...
+}
+
+/**
+ * Cria (ou retorna, se já existir e sem alterações) um contrato de assinatura digital
+ * a partir de dados genéricos — usado pelos modelos que não possuem um SaleRecord
+ * associado (ex: Venda à Vista/Parcelada modular e Exclusividade).
+ *
+ * Usa exatamente o mesmo fluxo de link + CPF/CNPJ + código de 6 dígitos + hash + QR Code
+ * já utilizado por createOrGetDigitalContract, garantindo que os 3 modelos de contrato
+ * compartilhem um único fluxo de assinatura digital.
+ */
+export async function createOrGetDigitalContractGeneric(
+  input: GenericDigitalContractInput
+): Promise<ContratoAssinaturaDigital> {
+  const existing = getDigitalContractBySaleId(input.contractId);
+  const hashOriginal = await computeSha256(input.documentoHtml);
+
+  if (existing) {
+    const hasAnySignature = existing.partes.some(p => p.status === 'assinado');
+    if (hasAnySignature && existing.hashSha256Original !== hashOriginal) {
+      return createNewContractVersion(existing, input.documentoHtml, hashOriginal);
+    }
+    return existing;
+  }
+
+  const validationToken = generateSecureToken();
+  const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const validationUrl = `${appOrigin}/validar/${validationToken}`;
+  const qrCodeDataUrl = await generateQrCodeDataUrl(validationUrl);
+
+  const partes: ParteAssinante[] = input.partes.map((p, idx) => ({
+    id: `party-${idx + 1}-${input.contractId}`,
+    role: p.role,
+    label: p.label,
+    nome: p.nome,
+    cpf: p.cpf,
+    email: p.email || '',
+    telefone: p.telefone || '',
+    tokenAssinatura: generateSecureToken(),
+    status: 'aguardando',
+  }));
+
+  const initialEvent: EventoAuditoriaAssinatura = {
+    id: `evt-${Date.now()}-1`,
+    tipo: 'CONTRATO_CRIADO',
+    descricao: `Contrato ${input.contractId} criado e preparado para assinatura digital.`,
+    usuario: partes[0]?.nome || 'Sistema',
+    dataHora: new Date().toISOString(),
+    dataHoraFormatada: new Date().toLocaleString('pt-BR'),
+    ip: '187.54.120.91',
+    dispositivo: getClientDeviceInfo().dispositivo,
+  };
+
+  const newContract: ContratoAssinaturaDigital = {
+    id: `dig-contract-${input.contractId}-${Date.now()}`,
+    contractId: input.contractId,
+    contractVersionId: 'v1',
+    versao: 1,
+    titulo: input.titulo,
+    tipoContrato: input.tipoContrato,
+    fluxo: 'eu_assino_e_envio',
+    status: 'aguardando_assinatura',
+    documentoHtml: input.documentoHtml,
+    hashSha256Original: hashOriginal,
+    partes,
+    eventos: [initialEvent],
+    qrCodeValidationUrl: validationUrl,
+    validationToken,
+    qrCodeDataUrl,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    historicoVersoes: [],
+  };
+
+  const list = getStoredDigitalContracts();
+  list.unshift(newContract);
+  saveStoredDigitalContracts(list);
+
+  return newContract;
+}
+
 /**
  * Cria nova versão de contrato quando houver alterações após assinaturas (Regra de Versão Estrita)
  */
