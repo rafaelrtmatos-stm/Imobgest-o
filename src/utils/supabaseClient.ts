@@ -1,5 +1,13 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Cliente, Contrato, Venda } from '../types';
+import { 
+  AppUser, 
+  Cliente, 
+  CompanyConfig, 
+  Corretor, 
+  DocumentTemplate, 
+  Empreendimento, 
+  SaleRecord 
+} from '../types';
 
 export interface SupabaseConfig {
   url: string;
@@ -7,13 +15,15 @@ export interface SupabaseConfig {
   autoSync: boolean;
 }
 
-const SUPABASE_CONFIG_KEY = 'imobgestao_supabase_config_v2';
-const SUPABASE_LAST_SYNC_KEY = 'imobgestao_supabase_last_sync_v2';
+const SUPABASE_CONFIG_KEY = 'imobgestao_supabase_config_v1';
+const SUPABASE_LAST_SYNC_KEY = 'imobgestao_supabase_last_sync_v1';
 
 const getEnvVar = (key: string): string => {
   try {
     const metaEnv = (import.meta as any).env;
-    if (metaEnv && metaEnv[key]) return metaEnv[key];
+    if (metaEnv && metaEnv[key]) {
+      return metaEnv[key];
+    }
   } catch (e) {
     // ignore
   }
@@ -21,15 +31,17 @@ const getEnvVar = (key: string): string => {
 };
 
 export const DEFAULT_SUPABASE_CONFIG: SupabaseConfig = {
-  url: getEnvVar('VITE_SUPABASE_URL'),
-  anonKey: getEnvVar('VITE_SUPABASE_ANON_KEY'),
+  url: getEnvVar('VITE_SUPABASE_URL') || 'https://pqapnnjvhiritesxcpgr.supabase.co',
+  anonKey: getEnvVar('VITE_SUPABASE_ANON_KEY') || 'sb_publishable_9DRmzFE8YpsnpJeahj29PQ_a_4kIPAt',
   autoSync: true,
 };
 
 export function getStoredSupabaseConfig(): SupabaseConfig {
   try {
     const item = localStorage.getItem(SUPABASE_CONFIG_KEY);
-    if (!item) return DEFAULT_SUPABASE_CONFIG;
+    if (!item) {
+      return DEFAULT_SUPABASE_CONFIG;
+    }
     const parsed = JSON.parse(item);
     return {
       url: parsed.url || DEFAULT_SUPABASE_CONFIG.url,
@@ -37,20 +49,26 @@ export function getStoredSupabaseConfig(): SupabaseConfig {
       autoSync: parsed.autoSync !== undefined ? parsed.autoSync : true,
     };
   } catch (e) {
+    console.error('Erro ao ler configuração do Supabase:', e);
     return DEFAULT_SUPABASE_CONFIG;
   }
 }
 
 export function saveStoredSupabaseConfig(config: SupabaseConfig): void {
-  localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify(config));
-  cachedClient = null;
+  try {
+    localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify(config));
+    // Reset client to reinitialize
+    cachedClient = null;
+  } catch (e) {
+    console.error('Erro ao salvar configuração do Supabase:', e);
+  }
 }
 
 export function getLastSyncTime(): string | null {
   return localStorage.getItem(SUPABASE_LAST_SYNC_KEY);
 }
 
-function setLastSyncTime(dateStr: string): void {
+export function setLastSyncTime(dateStr: string): void {
   localStorage.setItem(SUPABASE_LAST_SYNC_KEY, dateStr);
 }
 
@@ -58,11 +76,20 @@ let cachedClient: SupabaseClient | null = null;
 
 export function getSupabaseClient(): SupabaseClient | null {
   const config = getStoredSupabaseConfig();
-  if (!config.url || !config.anonKey) return null;
-  if (cachedClient) return cachedClient;
+  if (!config.url || !config.anonKey) {
+    return null;
+  }
+
+  if (cachedClient) {
+    return cachedClient;
+  }
+
   try {
     cachedClient = createClient(config.url.trim(), config.anonKey.trim(), {
-      auth: { persistSession: true, autoRefreshToken: true },
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
     });
     return cachedClient;
   } catch (error) {
@@ -71,371 +98,610 @@ export function getSupabaseClient(): SupabaseClient | null {
   }
 }
 
-export async function testSupabaseConnection(): Promise<{ success: boolean; message: string }> {
+/**
+ * Testa a conexão com o Supabase
+ */
+export async function testSupabaseConnection(): Promise<{ success: boolean; message: string; tablesFound?: string[] }> {
   const client = getSupabaseClient();
-  if (!client) return { success: false, message: 'URL ou Chave do Supabase não configuradas.' };
+  if (!client) {
+    return { success: false, message: 'URL ou Chave do Supabase não configuradas.' };
+  }
+
   try {
-    const { error } = await client.from('clientes').select('id').limit(1);
-    if (error) {
-      if (error.code === '42P01' || error.message?.includes('does not exist')) {
-        return { success: true, message: 'Conectado! As tabelas ainda precisam ser criadas no SQL Editor.' };
+    // Tenta uma consulta simples
+    const { error: salesError } = await client
+      .from('sales')
+      .select('id')
+      .limit(1);
+
+    if (salesError) {
+      if (salesError.code === 'PGRST116' || salesError.message?.includes('does not exist') || salesError.code === '42P01') {
+        return { 
+          success: true, 
+          message: 'Conectado com sucesso ao Supabase! (Observação: as tabelas precisam ser criadas no SQL Editor).',
+          tablesFound: []
+        };
       }
-      return { success: false, message: `Erro: ${error.message}` };
+      return { 
+        success: false, 
+        message: `Erro na resposta do Supabase: ${salesError.message || salesError.code}` 
+      };
     }
-    return { success: true, message: 'Conexão ativa e tabelas prontas.' };
+
+    return { 
+      success: true, 
+      message: 'Conexão ativa e tabelas prontas para sincronização!',
+      tablesFound: ['sales']
+    };
   } catch (err: any) {
-    return { success: false, message: `Falha na requisição: ${err.message || 'erro desconhecido'}` };
-  }
-}
-
-export async function upsertClienteToSupabase(cliente: Cliente): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
-  try {
-    const { error } = await client.from('clientes').upsert({
-      id: cliente.id,
-      nome: cliente.nome,
-      telefone: cliente.telefone || '',
-      email: cliente.email || '',
-      data: cliente,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
-    return !error;
-  } catch {
-    return false;
-  }
-}
-
-export async function upsertContratoToSupabase(contrato: Contrato): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
-  try {
-    const { error } = await client.from('contratos').upsert({
-      id: contrato.id,
-      numero: contrato.numero,
-      cliente_id: contrato.clienteId,
-      status: contrato.status,
-      valor: contrato.valor,
-      data: contrato,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
-    return !error;
-  } catch {
-    return false;
-  }
-}
-
-export async function upsertVendaToSupabase(venda: Venda): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
-  try {
-    const { error } = await client.from('vendas').upsert({
-      id: venda.id,
-      contrato_id: venda.contratoId,
-      valor: venda.valor,
-      status: venda.status,
-      data: venda,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
-    return !error;
-  } catch {
-    return false;
-  }
-}
-
-/** Busca um único contrato pelo id — usado pela página pública /assinar/:id. */
-export async function fetchContratoById(id: string): Promise<Contrato | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
-  try {
-    const { data, error } = await client.from('contratos').select('data').eq('id', id).single();
-    if (error || !data) return null;
-    return data.data as Contrato;
-  } catch {
-    return null;
-  }
-}
-
-export async function deleteFromSupabase(table: 'clientes' | 'contratos' | 'vendas', id: string): Promise<boolean> {
-  const client = getSupabaseClient();
-  if (!client) return false;
-  try {
-    const { error } = await client.from(table).delete().eq('id', id);
-    return !error;
-  } catch {
-    return false;
-  }
-}
-
-export async function syncAllFromSupabase(): Promise<{
-  success: boolean;
-  message: string;
-  data?: { clientes?: Cliente[]; contratos?: Contrato[]; vendas?: Venda[] };
-}> {
-  const client = getSupabaseClient();
-  if (!client) return { success: false, message: 'Supabase não configurado.' };
-  try {
-    const resultData: any = {};
-
-    const { data: clientesRes, error: clientesErr } = await client.from('clientes').select('data');
-    if (!clientesErr && clientesRes) resultData.clientes = clientesRes.map((r: any) => r.data).filter(Boolean);
-
-    const { data: contratosRes, error: contratosErr } = await client.from('contratos').select('data');
-    if (!contratosErr && contratosRes) resultData.contratos = contratosRes.map((r: any) => r.data).filter(Boolean);
-
-    const { data: vendasRes, error: vendasErr } = await client.from('vendas').select('data');
-    if (!vendasErr && vendasRes) resultData.vendas = vendasRes.map((r: any) => r.data).filter(Boolean);
-
-    const nowStr = new Date().toLocaleString('pt-BR');
-    setLastSyncTime(nowStr);
-
-    return { success: true, message: `Dados baixados do Supabase com sucesso (${nowStr})!`, data: resultData };
-  } catch (err: any) {
-    return { success: false, message: `Erro ao baixar dados do Supabase: ${err.message || 'falha inesperada'}` };
-  }
-}
-
-export async function syncAllToSupabase(payload: {
-  clientes: Cliente[];
-  contratos: Contrato[];
-  vendas: Venda[];
-}): Promise<{ success: boolean; message: string }> {
-  const client = getSupabaseClient();
-  if (!client) return { success: false, message: 'Supabase não configurado.' };
-
-  const errors: string[] = [];
-  try {
-    if (payload.clientes.length > 0) {
-      const rows = payload.clientes.map(c => ({
-        id: c.id, nome: c.nome, telefone: c.telefone || '', email: c.email || '', data: c,
-        updated_at: new Date().toISOString(),
-      }));
-      const { error } = await client.from('clientes').upsert(rows, { onConflict: 'id' });
-      if (error) errors.push(`Clientes: ${error.message}`);
-    }
-
-    if (payload.contratos.length > 0) {
-      const rows = payload.contratos.map(c => ({
-        id: c.id, numero: c.numero, cliente_id: c.clienteId, status: c.status, valor: c.valor, data: c,
-        updated_at: new Date().toISOString(),
-      }));
-      const { error } = await client.from('contratos').upsert(rows, { onConflict: 'id' });
-      if (error) errors.push(`Contratos: ${error.message}`);
-    }
-
-    if (payload.vendas.length > 0) {
-      const rows = payload.vendas.map(v => ({
-        id: v.id, contrato_id: v.contratoId, valor: v.valor, status: v.status, data: v,
-        updated_at: new Date().toISOString(),
-      }));
-      const { error } = await client.from('vendas').upsert(rows, { onConflict: 'id' });
-      if (error) errors.push(`Vendas: ${error.message}`);
-    }
-
-    if (errors.length > 0) {
-      return { success: false, message: `Avisos ao sincronizar: ${errors.join(' | ')}` };
-    }
-
-    const nowStr = new Date().toLocaleString('pt-BR');
-    setLastSyncTime(nowStr);
-    return { success: true, message: `Todos os dados foram salvos no Supabase com sucesso (${nowStr})!` };
-  } catch (err: any) {
-    return { success: false, message: `Erro na sincronização: ${err.message || 'falha inesperada'}` };
+    return { 
+      success: false, 
+      message: `Falha na requisição ao Supabase: ${err.message || 'Erro desconhecido'}` 
+    };
   }
 }
 
 /**
- * Remove todas as linhas das tabelas no Supabase (usado por "Zerar Informações").
+ * Salva ou atualiza uma venda no Supabase
  */
-export async function clearAllSupabaseData(): Promise<{ success: boolean; message: string }> {
+export async function upsertSaleToSupabase(sale: SaleRecord): Promise<boolean> {
   const client = getSupabaseClient();
-  if (!client) return { success: true, message: 'Supabase não configurado — nada a limpar na nuvem.' };
-  const errors: string[] = [];
-  for (const table of ['vendas', 'contratos', 'clientes'] as const) {
-    try {
-      const { error } = await client.from(table).delete().neq('id', '__none__');
-      if (error) errors.push(`${table}: ${error.message}`);
-    } catch (err: any) {
-      errors.push(`${table}: ${err.message || 'erro desconhecido'}`);
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('sales').upsert({
+      id: sale.id,
+      cliente_nome: sale.buyer?.nome || '',
+      cliente_cpf: sale.buyer?.cpf || '',
+      imovel_nome: sale.property?.empreendimento || '',
+      valor_total: sale.financial?.valorTotal || 0,
+      status: sale.status,
+      data: sale,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Aviso ao sincronizar venda no Supabase:', error.message);
+      return false;
     }
+    return true;
+  } catch (err) {
+    console.warn('Erro ao salvar venda no Supabase:', err);
+    return false;
   }
-  if (errors.length > 0) return { success: false, message: errors.join(' | ') };
-  return { success: true, message: 'Dados da nuvem removidos com sucesso.' };
 }
 
+/**
+ * Salva ou atualiza um cliente no Supabase
+ */
+export async function upsertClienteToSupabase(cliente: Cliente): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('clientes').upsert({
+      id: cliente.id,
+      nome: cliente.nome,
+      cpf: cliente.cpf,
+      telefone: cliente.telefone || cliente.contato1 || '',
+      email: cliente.email || '',
+      data: cliente,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Aviso ao sincronizar cliente no Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Erro ao salvar cliente no Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Salva ou atualiza um empreendimento no Supabase
+ */
+export async function upsertEmpreendimentoToSupabase(emp: Empreendimento): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('empreendimentos').upsert({
+      id: emp.id,
+      nome: emp.nome,
+      cidade: emp.cidade,
+      uf: emp.uf,
+      total_lotes: emp.totalLotes,
+      data: emp,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Aviso ao sincronizar empreendimento no Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Erro ao salvar empreendimento no Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Salva ou atualiza um modelo de contrato no Supabase
+ */
+export async function upsertWordTemplateToSupabase(template: DocumentTemplate): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('word_templates').upsert({
+      id: template.id,
+      nome: template.nome,
+      tipo_documento: template.tipoDocumento,
+      file_name: template.fileName,
+      data: template,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Aviso ao sincronizar modelo no Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Erro ao salvar modelo no Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Exclui um registro do Supabase
+ */
+export async function deleteFromSupabase(table: 'sales' | 'clientes' | 'empreendimentos' | 'corretores' | 'word_templates' | 'app_users', id: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from(table).delete().eq('id', id);
+    if (error) {
+      console.warn(`Aviso ao excluir de ${table} no Supabase:`, error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn(`Erro ao excluir de ${table} no Supabase:`, err);
+    return false;
+  }
+}
+
+/**
+ * Salva ou atualiza um usuário no Supabase
+ */
+export async function upsertUserToSupabase(user: AppUser): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('app_users').upsert({
+      id: user.id,
+      nome: user.nome,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      data: user,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Aviso ao sincronizar usuário no Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Erro ao salvar usuário no Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Salva ou atualiza a configuração da empresa no Supabase
+ */
+export async function upsertCompanyConfigToSupabase(config: CompanyConfig): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('company_config').upsert({
+      id: 'default',
+      nome_empresa: config.nomeEmpresa,
+      cpf_cnpj: config.cpfCnpj,
+      data: config,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Aviso ao sincronizar empresa no Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Erro ao salvar empresa no Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Salva ou atualiza um corretor no Supabase
+ */
+export async function upsertCorretorToSupabase(corretor: Corretor): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('corretores').upsert({
+      id: corretor.id,
+      nome: corretor.nome,
+      creci: corretor.creci || '',
+      data: corretor,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Aviso ao sincronizar corretor no Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Erro ao salvar corretor no Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Sincroniza todos os dados locais para o Supabase (Upload / Backup)
+ */
+export async function syncAllToSupabase(payload: {
+  sales: SaleRecord[];
+  clientes: Cliente[];
+  empreendimentos: Empreendimento[];
+  corretores: Corretor[];
+  wordTemplates: DocumentTemplate[];
+  companyConfig: CompanyConfig;
+  users: AppUser[];
+}): Promise<{ success: boolean; message: string; details?: any }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, message: 'Supabase não configurado.' };
+  }
+
+  try {
+    const errors: string[] = [];
+
+    // 1. Sincroniza Vendas
+    if (payload.sales.length > 0) {
+      const salesRows = payload.sales.map(s => ({
+        id: s.id,
+        cliente_nome: s.buyer?.nome || '',
+        cliente_cpf: s.buyer?.cpf || '',
+        imovel_nome: s.property?.empreendimento || '',
+        valor_total: s.financial?.valorTotal || 0,
+        status: s.status,
+        data: s,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error: salesErr } = await client.from('sales').upsert(salesRows, { onConflict: 'id' });
+      if (salesErr) errors.push(`Vendas: ${salesErr.message}`);
+    }
+
+    // 2. Sincroniza Clientes
+    if (payload.clientes.length > 0) {
+      const clientesRows = payload.clientes.map(c => ({
+        id: c.id,
+        nome: c.nome,
+        cpf: c.cpf,
+        telefone: c.telefone || c.contato1 || '',
+        email: c.email || '',
+        data: c,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error: clientesErr } = await client.from('clientes').upsert(clientesRows, { onConflict: 'id' });
+      if (clientesErr) errors.push(`Clientes: ${clientesErr.message}`);
+    }
+
+    // 3. Sincroniza Empreendimentos
+    if (payload.empreendimentos.length > 0) {
+      const empRows = payload.empreendimentos.map(e => ({
+        id: e.id,
+        nome: e.nome,
+        cidade: e.cidade,
+        uf: e.uf,
+        total_lotes: e.totalLotes,
+        data: e,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error: empErr } = await client.from('empreendimentos').upsert(empRows, { onConflict: 'id' });
+      if (empErr) errors.push(`Empreendimentos: ${empErr.message}`);
+    }
+
+    // 4. Sincroniza Corretores
+    if (payload.corretores.length > 0) {
+      const corrRows = payload.corretores.map(c => ({
+        id: c.id,
+        nome: c.nome,
+        creci: c.creci || '',
+        data: c,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error: corrErr } = await client.from('corretores').upsert(corrRows, { onConflict: 'id' });
+      if (corrErr) errors.push(`Corretores: ${corrErr.message}`);
+    }
+
+    // 5. Sincroniza Modelos de Contratos
+    if (payload.wordTemplates.length > 0) {
+      const templRows = payload.wordTemplates.map(t => ({
+        id: t.id,
+        nome: t.nome,
+        tipo_documento: t.tipoDocumento,
+        file_name: t.fileName,
+        data: t,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error: templErr } = await client.from('word_templates').upsert(templRows, { onConflict: 'id' });
+      if (templErr) errors.push(`Modelos: ${templErr.message}`);
+    }
+
+    // 6. Sincroniza Configurações da Empresa
+    const { error: configErr } = await client.from('company_config').upsert({
+      id: 'default',
+      nome_empresa: payload.companyConfig.nomeEmpresa,
+      cpf_cnpj: payload.companyConfig.cpfCnpj,
+      data: payload.companyConfig,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+    if (configErr) errors.push(`Config Empresa: ${configErr.message}`);
+
+    // 7. Sincroniza Usuários
+    if (payload.users.length > 0) {
+      const userRows = payload.users.map(u => ({
+        id: u.id,
+        nome: u.nome,
+        email: u.email,
+        role: u.role,
+        status: u.status,
+        data: u,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error: userErr } = await client.from('app_users').upsert(userRows, { onConflict: 'id' });
+      if (userErr) errors.push(`Usuários: ${userErr.message}`);
+    }
+
+    if (errors.length > 0) {
+      return {
+        success: false,
+        message: `Houve avisos ao sincronizar com algumas tabelas: ${errors.join(' | ')}. Verifique se executou o script SQL no Supabase.`,
+      };
+    }
+
+    const nowStr = new Date().toLocaleString('pt-BR');
+    setLastSyncTime(nowStr);
+
+    return {
+      success: true,
+      message: `Todos os dados foram salvos no Supabase com sucesso (${nowStr})!`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Erro na sincronização: ${err.message || 'Falha inesperada'}`,
+    };
+  }
+}
+
+/**
+ * Baixa todos os dados da nuvem do Supabase para o sistema local
+ */
+export async function syncAllFromSupabase(): Promise<{
+  success: boolean;
+  message: string;
+  data?: {
+    sales?: SaleRecord[];
+    clientes?: Cliente[];
+    empreendimentos?: Empreendimento[];
+    corretores?: Corretor[];
+    wordTemplates?: DocumentTemplate[];
+    companyConfig?: CompanyConfig;
+    users?: AppUser[];
+  };
+}> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, message: 'Supabase não configurado.' };
+  }
+
+  try {
+    const resultData: any = {};
+
+    // 1. Vendas
+    const { data: salesRes, error: salesErr } = await client.from('sales').select('data');
+    if (!salesErr && salesRes) {
+      resultData.sales = salesRes.map(r => r.data).filter(Boolean);
+    }
+
+    // 2. Clientes
+    const { data: clientesRes, error: clientesErr } = await client.from('clientes').select('data');
+    if (!clientesErr && clientesRes) {
+      resultData.clientes = clientesRes.map(r => r.data).filter(Boolean);
+    }
+
+    // 3. Empreendimentos
+    const { data: empRes, error: empErr } = await client.from('empreendimentos').select('data');
+    if (!empErr && empRes) {
+      resultData.empreendimentos = empRes.map(r => r.data).filter(Boolean);
+    }
+
+    // 4. Corretores
+    const { data: corrRes, error: corrErr } = await client.from('corretores').select('data');
+    if (!corrErr && corrRes) {
+      resultData.corretores = corrRes.map(r => r.data).filter(Boolean);
+    }
+
+    // 5. Modelos
+    const { data: templRes, error: templErr } = await client.from('word_templates').select('data');
+    if (!templErr && templRes) {
+      resultData.wordTemplates = templRes.map(r => r.data).filter(Boolean);
+    }
+
+    // 6. Config Empresa
+    const { data: configRes, error: configErr } = await client.from('company_config').select('data').eq('id', 'default').single();
+    if (!configErr && configRes?.data) {
+      resultData.companyConfig = configRes.data;
+    }
+
+    // 7. Usuários
+    const { data: userRes, error: userErr } = await client.from('app_users').select('data');
+    if (!userErr && userRes) {
+      resultData.users = userRes.map(r => r.data).filter(Boolean);
+    }
+
+    const nowStr = new Date().toLocaleString('pt-BR');
+    setLastSyncTime(nowStr);
+
+    return {
+      success: true,
+      message: `Dados baixados do Supabase com sucesso (${nowStr})!`,
+      data: resultData,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Erro ao baixar dados do Supabase: ${err.message || 'Falha inesperada'}`,
+    };
+  }
+}
+
+/**
+ * Retorna o script SQL completo para rodar no Supabase SQL Editor
+ */
 export function getSupabaseSqlSchema(): string {
   return `-- ==============================================================================
--- SCHEMA IMOBGESTÃO — GESTÃO DE CONTRATOS
+-- SCHEMA IMOBGESTÃO PRO - SUPABASE POSTGRESQL
 -- Copie e cole este script no SQL Editor do seu projeto Supabase e clique em "Run"
 -- ==============================================================================
 
+-- 1. TABELA DE VENDAS E CONTRATOS
+CREATE TABLE IF NOT EXISTS public.sales (
+    id TEXT PRIMARY KEY,
+    cliente_nome TEXT,
+    cliente_cpf TEXT,
+    imovel_nome TEXT,
+    valor_total NUMERIC,
+    status TEXT,
+    data JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 2. TABELA DE CLIENTES / COMPRADORES
 CREATE TABLE IF NOT EXISTS public.clientes (
     id TEXT PRIMARY KEY,
     nome TEXT NOT NULL,
+    cpf TEXT,
     telefone TEXT,
     email TEXT,
     data JSONB NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS public.contratos (
+-- 3. TABELA DE EMPREENDIMENTOS E LOTES
+CREATE TABLE IF NOT EXISTS public.empreendimentos (
     id TEXT PRIMARY KEY,
-    numero TEXT,
-    cliente_id TEXT,
-    status TEXT,
-    valor NUMERIC,
+    nome TEXT NOT NULL,
+    cidade TEXT,
+    uf TEXT,
+    total_lotes INTEGER,
     data JSONB NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS public.vendas (
+-- 4. TABELA DE CORRETORES
+CREATE TABLE IF NOT EXISTS public.corretores (
     id TEXT PRIMARY KEY,
-    contrato_id TEXT,
-    valor NUMERIC,
+    nome TEXT NOT NULL,
+    creci TEXT,
+    data JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 5. TABELA DE MODELOS DE CONTRATOS (.DOCX)
+CREATE TABLE IF NOT EXISTS public.word_templates (
+    id TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    tipo_documento TEXT,
+    file_name TEXT,
+    data JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 6. TABELA DE CONFIGURAÇÕES DA EMPRESA / IMOBILIÁRIA
+CREATE TABLE IF NOT EXISTS public.company_config (
+    id TEXT PRIMARY KEY,
+    nome_empresa TEXT,
+    cpf_cnpj TEXT,
+    data JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 7. TABELA DE USUÁRIOS DO SISTEMA
+CREATE TABLE IF NOT EXISTS public.app_users (
+    id TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    role TEXT,
     status TEXT,
     data JSONB NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- ==============================================================================
--- ASSINATURA ELETRÔNICA (OTP) — códigos de verificação por parte do contrato
--- As partes (vendedor/comprador ou contratante/contratado, + cônjuge) ficam
--- dentro de contratos.data->'partes' (JSONB). Esta tabela guarda só os
--- códigos OTP temporários, nunca em texto puro (apenas o hash).
--- ==============================================================================
-
-CREATE TABLE IF NOT EXISTS public.verification_codes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    contract_id TEXT NOT NULL REFERENCES public.contratos(id) ON DELETE CASCADE,
-    parte_id TEXT NOT NULL,
-    code_hash TEXT NOT NULL,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    is_used BOOLEAN NOT NULL DEFAULT false,
-    used_at TIMESTAMP WITH TIME ZONE,
-    attempts INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
+-- HABILITAR ROW LEVEL SECURITY (RLS) E POLÍTICAS PÚBLICAS/ANÔNIMAS
+ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.contratos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.vendas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.verification_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.empreendimentos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.corretores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.word_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.company_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
 
+-- POLÍTICAS DE ACESSO TOTAL PARA CHAVE PÚBLICA (ANON)
 DO $$
 BEGIN
+    DROP POLICY IF EXISTS "Allow anon all on sales" ON public.sales;
+    CREATE POLICY "Allow anon all on sales" ON public.sales FOR ALL USING (true) WITH CHECK (true);
+
     DROP POLICY IF EXISTS "Allow anon all on clientes" ON public.clientes;
     CREATE POLICY "Allow anon all on clientes" ON public.clientes FOR ALL USING (true) WITH CHECK (true);
 
-    DROP POLICY IF EXISTS "Allow anon all on contratos" ON public.contratos;
-    CREATE POLICY "Allow anon all on contratos" ON public.contratos FOR ALL USING (true) WITH CHECK (true);
+    DROP POLICY IF EXISTS "Allow anon all on empreendimentos" ON public.empreendimentos;
+    CREATE POLICY "Allow anon all on empreendimentos" ON public.empreendimentos FOR ALL USING (true) WITH CHECK (true);
 
-    DROP POLICY IF EXISTS "Allow anon all on vendas" ON public.vendas;
-    CREATE POLICY "Allow anon all on vendas" ON public.vendas FOR ALL USING (true) WITH CHECK (true);
+    DROP POLICY IF EXISTS "Allow anon all on corretores" ON public.corretores;
+    CREATE POLICY "Allow anon all on corretores" ON public.corretores FOR ALL USING (true) WITH CHECK (true);
 
-    DROP POLICY IF EXISTS "Allow anon all on verification_codes" ON public.verification_codes;
-    CREATE POLICY "Allow anon all on verification_codes" ON public.verification_codes FOR ALL USING (true) WITH CHECK (true);
+    DROP POLICY IF EXISTS "Allow anon all on word_templates" ON public.word_templates;
+    CREATE POLICY "Allow anon all on word_templates" ON public.word_templates FOR ALL USING (true) WITH CHECK (true);
+
+    DROP POLICY IF EXISTS "Allow anon all on company_config" ON public.company_config;
+    CREATE POLICY "Allow anon all on company_config" ON public.company_config FOR ALL USING (true) WITH CHECK (true);
+
+    DROP POLICY IF EXISTS "Allow anon all on app_users" ON public.app_users;
+    CREATE POLICY "Allow anon all on app_users" ON public.app_users FOR ALL USING (true) WITH CHECK (true);
 END $$;
-
--- ==============================================================================
--- RPC: checa os últimos 4 dígitos do CPF/CNPJ de UMA parte, dentro do banco.
--- O documento/CPF completo nunca trafega até o navegador antes da assinatura.
--- ==============================================================================
-CREATE OR REPLACE FUNCTION check_contrato_parte_last_digits(
-  p_contract_id text,
-  p_parte_id text,
-  p_last_digits text
-) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_partes jsonb;
-  v_parte jsonb;
-  v_cpf_cnpj text;
-  v_attempts integer;
-  v_matched boolean;
-BEGIN
-  SELECT data->'partes' INTO v_partes FROM contratos WHERE id = p_contract_id FOR UPDATE;
-  IF v_partes IS NULL THEN
-    RETURN jsonb_build_object('matched', false, 'locked', false, 'attempts_remaining', 0);
-  END IF;
-
-  SELECT p INTO v_parte FROM jsonb_array_elements(v_partes) p WHERE p->>'id' = p_parte_id;
-  IF v_parte IS NULL THEN
-    RETURN jsonb_build_object('matched', false, 'locked', false, 'attempts_remaining', 0);
-  END IF;
-
-  v_cpf_cnpj := v_parte->>'cpfCnpj';
-  v_attempts := coalesce((v_parte->>'checkAttempts')::integer, 0);
-
-  IF v_attempts >= 5 THEN
-    RETURN jsonb_build_object('matched', false, 'locked', true, 'attempts_remaining', 0);
-  END IF;
-
-  v_matched := v_cpf_cnpj IS NOT NULL
-    AND right(regexp_replace(v_cpf_cnpj, '\D', '', 'g'), 4) = p_last_digits;
-
-  IF v_matched THEN
-    v_attempts := 0;
-  ELSE
-    v_attempts := v_attempts + 1;
-  END IF;
-
-  UPDATE contratos SET data = jsonb_set(
-    data, '{partes}',
-    (SELECT jsonb_agg(CASE WHEN p->>'id' = p_parte_id
-        THEN jsonb_set(p, '{checkAttempts}', to_jsonb(v_attempts))
-        ELSE p END)
-     FROM jsonb_array_elements(v_partes) p)
-  ) WHERE id = p_contract_id;
-
-  IF v_matched THEN
-    RETURN jsonb_build_object('matched', true, 'locked', false, 'attempts_remaining', 5);
-  ELSE
-    RETURN jsonb_build_object('matched', false, 'locked', v_attempts >= 5, 'attempts_remaining', greatest(0, 5 - v_attempts));
-  END IF;
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION check_contrato_parte_last_digits(text, text, text) TO anon, authenticated;
-
--- ==============================================================================
--- RPC: valida o código OTP digitado pelo cliente (hash já calculado no cliente).
--- Controla tentativas e expiração de forma atômica.
--- ==============================================================================
-CREATE OR REPLACE FUNCTION validate_verification_code(
-  p_contract_id text,
-  p_parte_id text,
-  p_code_hash text
-) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_row verification_codes%ROWTYPE;
-BEGIN
-  SELECT * INTO v_row FROM verification_codes
-    WHERE contract_id = p_contract_id AND parte_id = p_parte_id AND is_used = false
-    ORDER BY created_at DESC LIMIT 1 FOR UPDATE;
-
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('ok', false, 'reason', 'not_found');
-  END IF;
-
-  IF v_row.attempts >= 5 THEN
-    RETURN jsonb_build_object('ok', false, 'reason', 'too_many_attempts');
-  END IF;
-
-  IF v_row.expires_at < now() THEN
-    RETURN jsonb_build_object('ok', false, 'reason', 'expired');
-  END IF;
-
-  IF v_row.code_hash <> p_code_hash THEN
-    UPDATE verification_codes SET attempts = attempts + 1 WHERE id = v_row.id;
-    RETURN jsonb_build_object('ok', false, 'reason', 'wrong_code');
-  END IF;
-
-  UPDATE verification_codes SET is_used = true, used_at = now() WHERE id = v_row.id;
-  RETURN jsonb_build_object('ok', true);
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION validate_verification_code(text, text, text) TO anon, authenticated;
 `;
 }
