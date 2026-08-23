@@ -71,14 +71,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       activeMatch: activeTab === 'dashboard',
     },
     {
-      id: 'empreendimentos' as ActiveTab,
-      label: 'Empreendimentos & Lotes',
-      description: 'Cadastro de loteamentos, quadras, metragens e lotes',
-      icon: Building2,
-      color: 'text-teal-500 bg-teal-500/10 border-teal-500/30',
-      activeMatch: activeTab === 'empreendimentos' || activeTab === 'map_explorer',
-    },
-    {
       id: 'clientes' as ActiveTab,
       label: 'Clientes & Compradores',
       description: 'Dados cadastrais, documentos e histórico',
@@ -199,18 +191,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <LayoutDashboard className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Dashboard</span>
-              </button>
-
-              <button
-                onClick={() => handleSelectTab('empreendimentos')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all duration-200 cursor-pointer ${
-                  activeTab === 'empreendimentos' || activeTab === 'map_explorer'
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Empreendimentos & Lotes</span>
               </button>
 
               <button
@@ -344,17 +324,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <LayoutDashboard className={`w-5 h-5 ${activeTab === 'dashboard' ? 'text-emerald-600 scale-110' : ''} transition-transform`} />
           <span className="text-[10px] mt-0.5">Início</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleSelectTab('empreendimentos')}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer min-w-[56px] ${
-            activeTab === 'empreendimentos' || activeTab === 'map_explorer' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Globe className={`w-5 h-5 ${activeTab === 'empreendimentos' || activeTab === 'map_explorer' ? 'text-emerald-600 scale-110' : ''} transition-transform`} />
-          <span className="text-[10px] mt-0.5">Lotes</span>
         </button>
 
         {/* BOTÃO CENTRAL DE NOVA VENDA */}

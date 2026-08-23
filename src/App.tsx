@@ -3,7 +3,6 @@ import { PenTool } from 'lucide-react';
 import { ActiveTab, Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { SalesForm } from './components/SalesForm';
-import { EntityManager } from './components/EntityManager';
 import { ContractViewer } from './components/ContractViewer';
 import { CommissionReports } from './components/CommissionReports';
 import { SalesList } from './components/SalesList';
@@ -833,23 +832,6 @@ export default function App() {
             onOpenWordDoc={(sale) => {
               handleOpenDocGenerator(undefined, sale);
             }}
-          />
-        )}
-
-        {/* 1. EMPREENDIMENTOS & LOTES (SEM MAPA - CADASTRO DIRETO) */}
-        {(activeTab === 'empreendimentos' || activeTab === 'map_explorer') && (
-          <EntityManager
-            empreendimentos={empreendimentos}
-            corretores={corretores}
-            onAddEmpreendimento={handleAddEmpreendimento}
-            onUpdateEmpreendimento={handleUpdateEmpreendimento}
-            onDeleteEmpreendimento={handleDeleteEmpreendimento}
-            onAddLote={handleAddLote}
-            onUpdateLote={handleUpdateLote}
-            onDeleteLote={handleDeleteLote}
-            onAddCorretor={handleAddCorretor}
-            onUpdateCorretor={handleUpdateCorretor}
-            onDeleteCorretor={handleDeleteCorretor}
           />
         )}
 
