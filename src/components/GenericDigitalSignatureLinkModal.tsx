@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { X, Link2, Copy, Check, Share2, Clock, ShieldCheck, MessageSquare } from 'lucide-react';
+import { X, Link2, Copy, Check, Share2, Clock, ShieldCheck, MessageSquare, PenTool, Lock, CheckCircle2 } from 'lucide-react';
 import { ContratoAssinaturaDigital, ParteAssinante } from '../types/digitalSignature';
+import { AppUser } from '../types';
 import {
   GenericDigitalContractInput,
   createOrGetDigitalContractGeneric,
   generateSignatureCode,
+  signPartyWithLoginPassword,
 } from '../utils/digitalSignatureService';
 
 interface GenericDigitalSignatureLinkModalProps {
   isOpen: boolean;
   onClose: () => void;
   input: GenericDigitalContractInput | null;
+  currentUser?: AppUser | null;
 }
 
 type ValidityOption = '10m' | '30m' | '1h' | '2h' | '24h' | 'custom';
@@ -36,12 +39,17 @@ export const GenericDigitalSignatureLinkModal: React.FC<GenericDigitalSignatureL
   isOpen,
   onClose,
   input,
+  currentUser,
 }) => {
   const [contract, setContract] = useState<ContratoAssinaturaDigital | null>(null);
   const [loading, setLoading] = useState(false);
   const [validity, setValidity] = useState<ValidityOption>('24h');
   const [customHours, setCustomHours] = useState(48);
   const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
+  const [signingPartyId, setSigningPartyId] = useState<string | null>(null);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [signError, setSignError] = useState<string | null>(null);
+  const [isSigning, setIsSigning] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !input) return;
@@ -57,11 +65,59 @@ export const GenericDigitalSignatureLinkModal: React.FC<GenericDigitalSignatureL
     };
   }, [isOpen, input]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setSigningPartyId(null);
+      setPasswordInput('');
+      setSignError(null);
+    }
+  }, [isOpen]);
+
   if (!isOpen || !input) return null;
 
   const validityHours = validity === 'custom' ? customHours : VALIDITY_HOURS[validity];
 
   const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+
+  const isCurrentUserParty = (party: ParteAssinante) => {
+    if (!currentUser) return false;
+    const sameEmail = !!currentUser.email && !!party.email &&
+      currentUser.email.trim().toLowerCase() === party.email.trim().toLowerCase();
+    const sameName = !!currentUser.nome && !!party.nome &&
+      currentUser.nome.trim().toLowerCase() === party.nome.trim().toLowerCase();
+    return sameEmail || sameName;
+  };
+
+  const handleStartSelfSign = (party: ParteAssinante) => {
+    setSigningPartyId(party.id);
+    setPasswordInput('');
+    setSignError(null);
+  };
+
+  const handleConfirmSelfSign = async (party: ParteAssinante) => {
+    if (!contract || !currentUser) return;
+    const cleanPassword = passwordInput.trim();
+    if (!cleanPassword) {
+      setSignError('Digite sua senha de login.');
+      return;
+    }
+    if (currentUser.senha !== cleanPassword) {
+      setSignError('Senha incorreta. Verifique e tente novamente.');
+      return;
+    }
+    setIsSigning(true);
+    setSignError(null);
+    try {
+      const result = await signPartyWithLoginPassword(contract.id, party.id);
+      setContract({ ...result.contract });
+      setSigningPartyId(null);
+      setPasswordInput('');
+    } catch (err: any) {
+      setSignError(err?.message || 'Não foi possível confirmar a assinatura.');
+    } finally {
+      setIsSigning(false);
+    }
+  };
 
   const buildMessage = (party: ParteAssinante, code: string) => {
     const link = `${appOrigin}/assinar/${party.tokenAssinatura}`;
@@ -160,6 +216,9 @@ export const GenericDigitalSignatureLinkModal: React.FC<GenericDigitalSignatureL
               <div className="space-y-3">
                 {contract.partes.map(party => {
                   const link = `${appOrigin}/assinar/${party.tokenAssinatura}`;
+                  const isSigned = party.status === 'assinado';
+                  const canSelfSign = !isSigned && isCurrentUserParty(party);
+                  const isSigningThis = signingPartyId === party.id;
                   return (
                     <div key={party.id} className="border border-slate-200 rounded-2xl p-4 space-y-2">
                       <div className="flex items-center justify-between">
@@ -167,44 +226,101 @@ export const GenericDigitalSignatureLinkModal: React.FC<GenericDigitalSignatureL
                           <p className="text-xs font-bold text-slate-900">{party.nome || 'Signatário'}</p>
                           <p className="text-[11px] text-slate-500">{party.label}</p>
                         </div>
-                        {party.codigoAssinatura && (
+                        {isSigned ? (
+                          <span className="flex items-center space-x-1 text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-300 px-2 py-1 rounded-lg">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Assinado</span>
+                          </span>
+                        ) : party.codigoAssinatura && (
                           <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-300 px-2 py-1 rounded-lg">
                             Código: {party.codigoAssinatura}
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                        <Link2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="text-[11px] font-mono text-slate-600 truncate">{link}</span>
-                      </div>
+                      {!isSigned && (
+                        <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                          <Link2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="text-[11px] font-mono text-slate-600 truncate">{link}</span>
+                        </div>
+                      )}
 
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(party)}
-                          className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
-                        >
-                          {copiedPartyId === party.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{party.codigoAssinatura ? 'Copiar mensagem' : 'Gerar link + código'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleWhatsApp(party)}
-                          className="flex items-center justify-center space-x-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5" />
-                          <span>WhatsApp</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(party) as any}
-                          className="flex items-center justify-center px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition-all"
-                          title="Compartilhar"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {!isSigned && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(party)}
+                            className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+                          >
+                            {copiedPartyId === party.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{party.codigoAssinatura ? 'Copiar mensagem' : 'Gerar link + código'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleWhatsApp(party)}
+                            className="flex items-center justify-center space-x-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>WhatsApp</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(party) as any}
+                            className="flex items-center justify-center px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition-all"
+                            title="Compartilhar"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
+                          {canSelfSign && !isSigningThis && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartSelfSign(party)}
+                              className="flex items-center justify-center space-x-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+                            >
+                              <PenTool className="w-3.5 h-3.5" />
+                              <span>Assinar agora</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {isSigningThis && (
+                        <div className="mt-2 p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2">
+                          <label className="flex items-center space-x-1.5 text-[11px] font-bold text-indigo-900">
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Confirme com sua senha de login para assinar</span>
+                          </label>
+                          <input
+                            type="password"
+                            value={passwordInput}
+                            onChange={(e) => setPasswordInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmSelfSign(party); }}
+                            placeholder="Sua senha"
+                            autoFocus
+                            className="w-full px-3 py-2 border border-indigo-300 rounded-lg text-xs"
+                          />
+                          {signError && (
+                            <p className="text-[11px] text-red-600 font-semibold">{signError}</p>
+                          )}
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={isSigning}
+                              onClick={() => handleConfirmSelfSign(party)}
+                              className="flex-1 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg cursor-pointer disabled:opacity-50"
+                            >
+                              {isSigning ? 'Assinando...' : 'Confirmar assinatura'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setSigningPartyId(null); setSignError(null); }}
+                              className="px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

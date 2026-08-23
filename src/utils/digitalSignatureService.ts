@@ -625,6 +625,26 @@ export function updateContractFluxo(
 }
 
 /**
+ * Assinatura do próprio usuário logado (corretor), diretamente no painel,
+ * autenticada pela senha de login em vez do código de 6 dígitos enviado ao cliente.
+ * Reaproveita o mesmo motor de assinatura (executeDigitalSignature), gerando e
+ * consumindo internamente um código de uso único para manter a trilha de auditoria.
+ */
+export async function signPartyWithLoginPassword(
+  contractId: string,
+  partyIdOrToken: string
+): Promise<{
+  success: boolean;
+  contract: ContratoAssinaturaDigital;
+  signatureId: string;
+  isFullySigned: boolean;
+  message: string;
+}> {
+  const { code } = generateSignatureCode(contractId, partyIdOrToken, 1);
+  return executeDigitalSignature(contractId, partyIdOrToken, 'adicional', code);
+}
+
+/**
  * Executa a assinatura de uma parte específica com todos os metadados de auditoria e segurança
  */
 export async function executeDigitalSignature(

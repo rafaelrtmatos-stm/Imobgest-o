@@ -1036,6 +1036,7 @@ export default function App() {
         isOpen={!!genericSignatureInput}
         onClose={() => setGenericSignatureInput(null)}
         input={genericSignatureInput}
+        currentUser={currentUser}
       />
 
       {/* FOOTER */}

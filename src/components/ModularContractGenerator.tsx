@@ -51,8 +51,6 @@ import {
 import { formatCurrency, formatDateBR, valorPorExtenso } from '../utils/formatters';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { ExclusivityLinkManager } from './ExclusivityLinkManager';
-import { ClientExclusividadeFillSign } from './ClientExclusividadeFillSign';
 import { GenericDigitalContractInput } from '../utils/digitalSignatureService';
 
 interface ModularContractGeneratorProps {
@@ -104,8 +102,6 @@ export const ModularContractGenerator: React.FC<ModularContractGeneratorProps> =
   const [activeMainView, setActiveMainView] = useState<'editor' | 'historico'>('editor');
   
   // Modo exclusivo para contrato de exclusividade: 'manual' | 'link'
-  const [exclusivityMode, setExclusivityMode] = useState<'manual' | 'link'>('manual');
-  const [clientTestingToken, setClientTestingToken] = useState<string | null>(null);
   
   // 2. Modelo .docx selecionado para base
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('default_modular');
@@ -879,78 +875,11 @@ export const ModularContractGenerator: React.FC<ModularContractGeneratorProps> =
         )}
       </div>
 
-      {/* VIEW 1: EDITOR MODULAR OU LINK DE PREENCHIMENTO */}
+      {/* VIEW 1: EDITOR MODULAR */}
       {activeMainView === 'editor' && (
         <div className="space-y-6">
-          {/* SELEÇÃO DO MODO NO CONTRATO DE EXCLUSIVIDADE */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center font-bold shrink-0">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
-                    Contrato de Exclusividade
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium hidden sm:inline">
-                    Escolha o modo de preenchimento
-                  </span>
-                </div>
-                <h2 className="text-base sm:text-lg font-bold text-slate-900 mt-0.5">
-                  {exclusivityMode === 'manual' 
-                    ? 'Preenchimento Manual no Painel' 
-                    : 'Envio de Link Seguro para o Cliente Preencher e Assinar'}
-                </h2>
-              </div>
-            </div>
-
-            {/* BOTÕES DE ESCOLHA SOLICITADOS PELO USUÁRIO */}
-            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setExclusivityMode('manual')}
-                className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
-                  exclusivityMode === 'manual'
-                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Edit3 className="w-4 h-4 text-emerald-600" />
-                <span>PREENCHER MANUALMENTE</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setExclusivityMode('link')}
-                className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
-                  exclusivityMode === 'link'
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Send className="w-4 h-4" />
-                <span>ENVIAR LINK PARA CLIENTE PREENCHER</span>
-              </button>
-            </div>
-          </div>
-
-          {/* MODO 1: ENVIAR LINK PARA CLIENTE PREENCHER */}
-          {exclusivityMode === 'link' && (
-            <ExclusivityLinkManager
-              currentFormData={formData}
-              onSelectContractForEditor={(loadedForm) => {
-                setFormData(loadedForm);
-                setExclusivityMode('manual');
-                showToast('Dados do contrato carregados para o editor manual!');
-              }}
-              onOpenClientView={(token) => setClientTestingToken(token)}
-            />
-          )}
-
-          {/* MODO 2: PREENCHER MANUALMENTE (EDITOR MODULAR COMPLETO) */}
-          {exclusivityMode === 'manual' && (
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          {/* MODULAR: EDITOR COMPLETO (PREENCHIMENTO MANUAL) */}
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
           
           {/* COLUNA ESQUERDA: SELETOR DE BLOCOS & FORMULÁRIOS (7 colunas) */}
           <div className="xl:col-span-7 space-y-6">
@@ -2092,36 +2021,6 @@ export const ModularContractGenerator: React.FC<ModularContractGeneratorProps> =
           </div>
 
         </div>
-          )}
-        </div>
-      )}
-
-      {/* OVERLAY DE TESTE DO CLIENTE (PARA O CORRETOR TESTAR EM TEMPO REAL) */}
-      {clientTestingToken && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex flex-col p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-slate-900 text-white px-4 py-3 rounded-2xl mb-2 flex items-center justify-between border border-slate-700 shadow-xl max-w-4xl w-full mx-auto">
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="text-xs font-bold text-slate-200">
-                Modo de Visualização/Simulação do Cliente (Exclusividade)
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setClientTestingToken(null)}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-xs rounded-xl border border-slate-600 transition-colors cursor-pointer"
-            >
-              Fechar Visualização do Cliente
-            </button>
-          </div>
-
-          <div className="max-w-4xl w-full mx-auto flex-1 pb-10">
-            <ClientExclusividadeFillSign
-              token={clientTestingToken}
-              onBackToApp={() => setClientTestingToken(null)}
-            />
-          </div>
         </div>
       )}
 
